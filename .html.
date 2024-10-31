@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Онлайн Магазин</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5dc;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .item {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #fff;
+        }
+        .item img {
+            max-width: 100%;
+            height: auto;
+        }
+        .add-item, .login, .search {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Онлайн Магазин</h1>
+
+    <div class="login">
+        <h2>Вход / Регистрация</h2>
+        <input type="text" id="username" placeholder="Имя пользователя">
+        <button onclick="login()">Войти</button>
+    </div>
+
+    <div class="search">
+        <input type="text" id="searchTerm" placeholder="Поиск товара">
+        <button onclick="searchItems()">Поиск</button>
+    </div>
+
+    <div class="add-item">
+        <h2>Добавить товар</h2>
+        <form id="itemForm">
+            <input type="text" id="itemName" placeholder="Название товара" required>
+            <input type="text" id="itemDescription" placeholder="Описание товара" required>
+            <input type="url" id="itemImage" placeholder="URL изображения" required>
+            <button type="submit">Добавить</button>
+        </form>
+    </div>
+
+    <div id="itemList"></div>
+
+    <script>
+        const items = [];
+        let currentUser = null;
+
+        document.getElementById('itemForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            if (!currentUser) {
+                alert('Сначала войдите в систему!');
+                return;
+            }
+            const name = document.getElementById('itemName').value;
+            const description = document.getElementById('itemDescription').value;
+            const image = document.getElementById('itemImage').value;
+
+            const item = { name, description, image, owner: currentUser };
+            items.push(item);
+            displayItems();
+            document.getElementById('itemForm').reset();
+        });
+
+        function displayItems(filter = '') {
+            const itemList = document.getElementById('itemList');
+            itemList.innerHTML = '';
+            const filteredItems = items.filter(item => item.name.includes(filter));
+
+            filteredItems.forEach((item, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item';
+                itemDiv.innerHTML = `
+                    <h3>${item.name}</h3>
+                    <img src="${item.image}" alt="${item.name}">
+                    <p>${item.description}</p>
+                    ${item.owner === currentUser ? `<button onclick="deleteItem(${index})">Удалить</button>` : ''}
+                `;
+                itemList.appendChild(itemDiv);
+            });
+        }
+
+        function searchItems() {
+            const searchTerm = document.getElementById('searchTerm').value;
+            displayItems(searchTerm);
+        }
+
+        function deleteItem(index) {
+            items.splice(index, 1);
+            displayItems();
+        }
+
+        function login() {
+            const username = document.getElementById('username').value;
+            if (!username) {
+                alert('Введите имя пользователя!');
+                return;
+            }
+            currentUser = username;
+            alert(`Добро пожаловать, ${currentUser}!`);
+            document.getElementById('username').value = '';
+        }
+    </script>
+</body>
+</html>
