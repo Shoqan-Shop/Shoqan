@@ -150,9 +150,9 @@
       <div class="row">
         <label for="diff">Сложность ботов:</label>
         <select id="diff">
-          <option value="0.7">Лёгкая</option>
-          <option value="1" selected>Средняя</option>
-          <option value="1.35">Сложная</option>
+          <option value="easy" selected>Лёгкая — для новичков</option>
+          <option value="normal">Средняя</option>
+          <option value="hard">Сложная</option>
         </select>
         <label for="qual">Графика:</label>
         <select id="qual">
@@ -482,6 +482,42 @@ const SHOP = [
   { key: 'he',     label: 'Граната HE',    price: 300 }
 ];
 
+// ---------------------------------------------------------- сложность
+// Профиль задаёт всё поведение противников: сколько их, чем вооружены,
+// как быстро реагируют, как метко стреляют и сколько выдерживают.
+const DIFFS = {
+  easy: {
+    label: 'Лёгкая', money: 2000,
+    count: r => clamp(1 + Math.ceil(r / 3), 2, 4),      // 2 бота в начале, максимум 4
+    tier:  r => clamp((r / 4) | 0, 0, 1),               // только пистолеты и MP5
+    hp: 65, armorFrom: 99,                              // без брони
+    react: [.85, 1.5],                                  // почти полторы секунды на реакцию
+    acc: .2, accFall: 14,                               // мажут почти всегда
+    rof: 2.4, hs: .01, dmg: .55,                        // редкие выстрелы, слабый урон
+    speed: .65, sight: 12, hearing: 7, memory: 3
+  },
+  normal: {
+    label: 'Средняя', money: 800,
+    count: r => clamp(2 + Math.ceil(r / 2), 3, 6),
+    tier:  r => clamp((r / 2) | 0, 0, 5),
+    hp: 100, armorFrom: 3,
+    react: [.22, .5],
+    acc: .62, accFall: 30,
+    rof: 1, hs: .12, dmg: 1,
+    speed: 1, sight: 24, hearing: 14, memory: 7
+  },
+  hard: {
+    label: 'Сложная', money: 800,
+    count: r => clamp(3 + Math.ceil(r / 2), 4, 7),
+    tier:  r => clamp(1 + ((r / 2) | 0), 0, 5),
+    hp: 100, armorFrom: 1,
+    react: [.13, .3],
+    acc: .85, accFall: 40,
+    rof: .85, hs: .2, dmg: 1.15,
+    speed: 1.15, sight: 26, hearing: 18, memory: 9
+  }
+};
+
 // ---------------------------------------------------------- состояние
 const G = {
   state: 'menu',          // menu | play | over
@@ -489,7 +525,7 @@ const G = {
   roundT: 0, roundLen: 115, buyTime: 20,
   phase: 'live',          // live | end
   endAt: 0, endWin: false,
-  difficulty: 1, quality: 1,
+  diff: DIFFS.easy, quality: 1,
   time: 0, shake: 0, flash: 0, hurt: 0, hitmark: 0, hitHS: false
 };
 const P = {
@@ -581,14 +617,15 @@ const BOT_LOADOUT = [
 ];
 function spawnBots() {
   bots.length = 0;
-  const count = clamp(2 + Math.ceil(G.round / 2), 3, 6);
-  const pool = BOT_LOADOUT[clamp((G.round / 2) | 0, 0, BOT_LOADOUT.length - 1)];
+  const D = G.diff;
+  const count = D.count(G.round);
+  const pool = BOT_LOADOUT[clamp(D.tier(G.round), 0, BOT_LOADOUT.length - 1)];
   const spots = marks.T.length ? marks.T : openTiles;
   for (let i = 0; i < count; i++) {
     const s = spots[i % spots.length];
     bots.push({
       x: s.x + rnd(-.3, .3), y: s.y + rnd(-.3, .3), ang: rnd(0, 6.28),
-      hp: 100, armor: G.round > 2 ? 100 : 0, alive: true, deadAt: 0,
+      hp: D.hp, armor: G.round >= D.armorFrom ? 100 : 0, alive: true, deadAt: 0,
       weapon: pool[(Math.random() * pool.length) | 0],
       mag: 30, reloadEnd: 0, nextFire: 0, reactAt: 0,
       alertAt: -99, lastX: s.x, lastY: s.y, step: null, pathAt: 0,
@@ -598,30 +635,31 @@ function spawnBots() {
   }
 }
 function botSees(b) {
-  return P.alive && Math.hypot(P.x - b.x, P.y - b.y) < 24 && losClear(b.x, b.y, P.x, P.y);
+  return P.alive && Math.hypot(P.x - b.x, P.y - b.y) < G.diff.sight && losClear(b.x, b.y, P.x, P.y);
 }
 function updateBot(b, dt) {
   const t = G.time;
   if (!b.alive) return;
+  const D = G.diff;
   const w = WEAPONS[b.weapon];
   const dist = Math.hypot(P.x - b.x, P.y - b.y);
   const sees = botSees(b);
 
   if (sees) {
-    if (t - b.alertAt > 3) b.reactAt = t + rnd(.22, .5) / G.difficulty;   // время реакции
+    if (t - b.alertAt > 3) b.reactAt = t + rnd(D.react[0], D.react[1]);   // время реакции
     b.alertAt = t; b.lastX = P.x; b.lastY = P.y;
   }
-  const alerted = t - b.alertAt < 7;
+  const alerted = t - b.alertAt < D.memory;
   b.ang = sees ? Math.atan2(P.y - b.y, P.x - b.x)
                : lerp(b.ang, Math.atan2(b.lastY - b.y, b.lastX - b.x), .08);
 
   // --- перемещение
   let tx, ty, speed;
-  if (alerted) { tx = b.lastX; ty = b.lastY; speed = 2.5; }
+  if (alerted) { tx = b.lastX; ty = b.lastY; speed = 2.5 * D.speed; }
   else {
     if (!b.goal || Math.hypot(b.goal.x - b.x, b.goal.y - b.y) < .8)
       b.goal = openTiles[(Math.random() * openTiles.length) | 0];
-    tx = b.goal.x; ty = b.goal.y; speed = 1.7;
+    tx = b.goal.x; ty = b.goal.y; speed = 1.7 * D.speed;
   }
   if (t > b.pathAt) { b.pathAt = t + .35; b.step = nextStep(b.x, b.y, tx, ty); }
   if (sees && dist < 5.5) {                       // ближний бой — стрейф
@@ -638,14 +676,14 @@ function updateBot(b, dt) {
   if (sees && t > b.reactAt && t > b.nextFire && t > b.reloadEnd) {
     if (b.mag <= 0) { b.mag = w.mag; b.reloadEnd = t + w.reload; SFX.reload(); return; }
     b.mag--;
-    b.nextFire = t + w.rate * (w.auto ? rnd(1, 1.5) : rnd(1.4, 2.6));
+    b.nextFire = t + w.rate * D.rof * (w.auto ? rnd(1, 1.5) : rnd(1.4, 2.6));
     const vol = clamp(1.6 / (1 + dist * .35), .05, 1);
     SFX.shot(w, vol);
-    // точность: падает с дистанцией, растёт со сложностью
-    const acc = clamp((1 - dist / 30) * .62 * G.difficulty, .08, .9);
+    // точность падает с дистанцией; на лёгком боты мажут почти всегда
+    const acc = clamp((1 - dist / D.accFall) * D.acc, .03, .9);
     if (Math.random() < acc) {
-      const head = Math.random() < .12 * G.difficulty;
-      let dmg = w.dmg * clamp(1 - dist * .012, .55, 1);
+      const head = Math.random() < D.hs;
+      let dmg = w.dmg * D.dmg * clamp(1 - dist * .012, .55, 1);
       if (head) dmg *= P.helmet ? w.hs * .38 : w.hs;
       hurtPlayer(dmg, b, head);
     }
@@ -750,7 +788,7 @@ function fire() {
     fx.push({ type: 'puff', x: P.x + dx * wall, y: P.y + dy * wall, t: t + .25 });
   }
   // выстрел слышно — боты настораживаются
-  for (const b of bots) if (b.alive && Math.hypot(b.x - P.x, b.y - P.y) < 14) {
+  for (const b of bots) if (b.alive && Math.hypot(b.x - P.x, b.y - P.y) < G.diff.hearing) {
     if (G.time - b.alertAt > 3) b.reactAt = G.time + rnd(.3, .7);
     b.alertAt = G.time; b.lastX = P.x; b.lastY = P.y;
   }
@@ -1306,7 +1344,7 @@ function frame(ts) {
 // ---------------------------------------------------------- запуск
 function newGame() {
   G.round = 1; G.winsCT = 0; G.winsT = 0; G.time = 0; lossStreak = 0;
-  P.money = 800; P.kills = 0; P.deaths = 0; P.armor = 0; P.helmet = false; P.nades = 0;
+  P.money = G.diff.money; P.kills = 0; P.deaths = 0; P.armor = 0; P.helmet = false; P.nades = 0;
   P.guns = {}; giveGun('glock'); P.cur = 'glock';
   feed.length = 0;
   document.querySelector('#menu h1').innerHTML = 'CS<span>2</span> LITE';
@@ -1315,7 +1353,7 @@ function newGame() {
 }
 $('startbtn').onclick = () => {
   audioOn();
-  G.difficulty = parseFloat($('diff').value);
+  G.diff = DIFFS[$('diff').value] || DIFFS.normal;
   setQuality(parseInt($('qual').value, 10));
   $('menu').classList.remove('show');
   document.body.classList.remove('inmenu');
@@ -1329,7 +1367,7 @@ $('resumebtn').onclick = () => {
 };
 $('closebuy').onclick = () => toggleBuy(false);
 $('qual').onchange = e => setQuality(parseInt(e.target.value, 10));
-$('diff').onchange = e => { G.difficulty = parseFloat(e.target.value); };
+$('diff').onchange = e => { G.diff = DIFFS[e.target.value] || DIFFS.normal; };
 
 setQuality(1);
 resize();
