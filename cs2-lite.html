@@ -687,7 +687,7 @@ function addFeed(killer, victim, head, byPlayer) {
 }
 
 // ---------------------------------------------------------- стрельба игрока
-function viewPitch() { return clamp(P.pitch + P.recV, -.85, .85); }
+function viewPitch() { return clamp(P.pitch + P.recV, -1.05, 1.05); }
 function viewAng()   { return P.ang + P.recH; }
 function moveSpeed() { return Math.hypot(P.vx, P.vy); }
 function currentSpread() {
@@ -935,7 +935,7 @@ addEventListener('mousemove', e => {
   if (document.pointerLockElement !== cv) return;
   const s = sens * (P.scoped ? .35 : 1);
   P.ang += e.movementX * s;
-  P.pitch = clamp(P.pitch - e.movementY * s * .9, -.8, .8);
+  P.pitch = clamp(P.pitch - e.movementY * s * .9, -1, 1);
 });
 let wasLocked = false;
 function requestLock() {
@@ -981,7 +981,8 @@ function renderWorld() {
   const ang = viewAng();
   const dirX = Math.cos(ang), dirY = Math.sin(ang);
   const planeX = -dirY * fovLen, planeY = dirX * fovLen;
-  const ph = (viewPitch() + P.bob * .012) * RH;
+  const bobY = Math.sin(P.bob * 2) * .008 * clamp(moveSpeed(), 0, 1);
+  const ph = (viewPitch() + bobY) * RH;
   const half = RH / 2;
 
   // --- потолок и пол
@@ -1268,7 +1269,7 @@ function updatePlayer(dt) {
     const dy = (sa * fy0 + ca * fx0) * base * dt;
     moveEntity(P, dx, dy, .22);
     P.vx = dx / dt / 4; P.vy = dy / dt / 4;
-    P.bob += dt * base * 2.6;
+    P.bob = (P.bob + dt * base * 2.6) % (Math.PI * 2);
     if (G.time > P.footT) { P.footT = G.time + (keys['shift'] ? .55 : .38); noiseBurst(.05, 900, .05); }
   } else { P.vx = P.vy = 0; P.bob = lerp(P.bob, Math.round(P.bob / Math.PI) * Math.PI, .12); }
 
