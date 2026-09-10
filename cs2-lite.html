@@ -58,6 +58,15 @@
                text-shadow: 0 3px 14px rgba(0,0,0,.9); opacity: 0; transition: opacity .25s; }
   #centermsg .sub { font-size: 14px; font-weight: 400; letter-spacing: 1px; opacity: .8; margin-top: 8px; }
 
+  #bombline { display: none; margin-top: 4px; font-size: 12px; font-weight: 700;
+              letter-spacing: 2px; color: #ff5a4a; }
+  #timer.bomb { color: #ff5a4a; }
+  #defuse { position: absolute; left: 50%; top: 58%; transform: translateX(-50%);
+            display: none; text-align: center; font-family: "Consolas", monospace;
+            font-size: 12px; letter-spacing: 2px; color: #7ee08a; }
+  #defusebar { width: 220px; height: 10px; margin-bottom: 5px; border-radius: 5px;
+               background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.2); overflow: hidden; }
+  #defusefill { display: block; height: 100%; width: 0%; background: #7ee08a; transition: width .06s linear; }
   #hint { position: absolute; left: 50%; bottom: 86px; transform: translateX(-50%);
           font-size: 13px; opacity: .75; font-family: "Consolas", monospace; }
 
@@ -86,6 +95,8 @@
   .btns { display: flex; gap: 10px; align-items: center; }
   .row { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 13px; }
   .row label { opacity: .7; }
+  input[type=range] { accent-color: #e0b060; width: 140px; }
+  input[type=checkbox] { accent-color: #e0b060; }
   select { background: #1b222b; color: #eee; border: 1px solid rgba(255,255,255,.15);
            border-radius: 4px; padding: 5px 8px; font-family: inherit; }
 
@@ -112,6 +123,7 @@
       <div id="timer">1:55</div>
       <div id="score"><span class="ct">CT 0</span> : <span class="t">0 T</span></div>
       <div id="roundinfo">Раунд 1</div>
+      <div id="bombline">C4 НА ТОЧКЕ A</div>
     </div>
     <div class="panel" id="health">
       <div><div class="lbl">HP</div><div class="big" id="hpv">100</div></div>
@@ -125,6 +137,7 @@
     </div>
     <div id="feed"></div>
     <div id="centermsg"></div>
+    <div id="defuse"><div id="defusebar"><i id="defusefill"></i></div>ОБЕЗВРЕЖИВАНИЕ</div>
     <div id="hint">Нажми <b>B</b> — магазин</div>
   </div>
 
@@ -132,9 +145,10 @@
     <div class="card">
       <h1>CS<span>2</span> LITE</h1>
       <h2>ЛЁГКАЯ КОПИЯ COUNTER-STRIKE 2</h2>
-      <p class="lead">Ты играешь за CT. Зачисти команду T, покупай оружие на заработанные деньги
-        и выиграй 10 раундов. Всё работает в браузере: рейкастинг-движок, боты, экономика, отдача,
-        хедшоты и звук — без единой внешней библиотеки.</p>
+      <p class="lead">Ты играешь за CT. Террористы несут C4 и идут закладывать её на точку A или B:
+        перебей их или обезвредь бомбу. Покупай оружие на заработанные деньги и выиграй 10 раундов.
+        Всё работает прямо в браузере — рейкастинг-движок, боты, экономика, отдача и звук
+        без единой внешней библиотеки.</p>
       <div class="keys">
         <div><b>W A S D</b> движение</div>
         <div><b>Мышь</b> обзор</div>
@@ -143,9 +157,17 @@
         <div><b>R</b> перезарядка</div>
         <div><b>1 2 3 4</b> оружие</div>
         <div><b>G</b> бросить гранату</div>
+        <div><b>E</b> обезвредить C4</div>
         <div><b>B</b> магазин</div>
         <div><b>Shift</b> тихий шаг</div>
+        <div><b>Ctrl / C</b> присесть</div>
         <div><b>Esc</b> пауза</div>
+      </div>
+      <div class="row">
+        <label for="sens">Чувствительность мыши:</label>
+        <input type="range" id="sens" min="0.4" max="3" step="0.1" value="1">
+        <b id="sensv" style="color:#e0b060;min-width:34px;display:inline-block">1.0</b>
+        <label style="cursor:pointer"><input type="checkbox" id="invy"> инверсия по вертикали</label>
       </div>
       <div class="row">
         <label for="diff">Сложность ботов:</label>
@@ -318,6 +340,18 @@ function makeFloorTex() {
   }
   return t;
 }
+function makeCeilTex() {
+  const t = new Uint32Array(TS * TS);
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    const n = hash2(x + 31, y + 57);
+    let r = 74, g = 76, b = 84;
+    if (y % 32 < 3 || x % 32 < 3) { r -= 18; g -= 18; b -= 18; }      // балки
+    if (y % 16 < 1) { r -= 8; g -= 8; b -= 8; }
+    const v = (n - .5) * 18; r += v; g += v; b += v;
+    t[y * TS + x] = packRGB(clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255));
+  }
+  return t;
+}
 // набор затемнённых копий: индекс = уровень освещённости
 function shadeSet(src) {
   const out = [];
@@ -334,6 +368,7 @@ function shadeSet(src) {
 }
 const WALL_TEX  = [makeTex(0), makeTex(1), makeTex(2), makeTex(3)].map(shadeSet);
 const FLOOR_TEX = shadeSet(makeFloorTex());
+const CEIL_TEX = shadeSet(makeCeilTex());
 const shadeLevel = d => clamp(((1 / (1 + d * 0.16)) * LEVELS) | 0, 0, LEVELS - 1);
 
 // ---------------------------------------------------------- спрайты
@@ -402,6 +437,18 @@ SPR.nade = (function () {
   }
   return { w: S, h: S, levels: shadeSet(d) };
 })();
+SPR.bomb = (function () {
+  const S = 16, d = new Uint32Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    if (x < 2 || x > 13 || y < 4 || y > 13) { d[y * S + x] = 0; continue; }
+    let c = packRGB(46, 48, 54);
+    if (y === 4 || y === 13 || x === 2 || x === 13) c = packRGB(28, 30, 34);
+    if (y > 5 && y < 9 && x > 4 && x < 11) c = packRGB(180, 40, 36);      // индикатор
+    if (y === 4 && x > 5 && x < 10) c = packRGB(120, 120, 128);           // антенна
+    d[y * S + x] = c;
+  }
+  return { w: S, h: S, levels: shadeSet(d) };
+})();
 SPR.boom = (function () {
   const S = 48, d = new Uint32Array(S * S);
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
@@ -449,7 +496,10 @@ const SFX = {
   buy()      { beep(880, .06, .1); setTimeout(() => beep(1320, .07, .1), 60); },
   win()      { [660, 880, 1180].forEach((f, i) => setTimeout(() => beep(f, .16, .12, 'triangle'), i * 130)); },
   lose()     { [440, 330, 220].forEach((f, i) => setTimeout(() => beep(f, .22, .12, 'triangle'), i * 150)); },
-  start()    { beep(520, .1, .1, 'triangle'); setTimeout(() => beep(780, .14, .1, 'triangle'), 120); }
+  start()    { beep(520, .1, .1, 'triangle'); setTimeout(() => beep(780, .14, .1, 'triangle'), 120); },
+  plant()    { beep(700, .09, .12, 'square'); setTimeout(() => beep(500, .16, .12, 'square'), 110); },
+  beep(f)    { beep(f, .07, .1, 'square'); },
+  defuse()   { beep(420, .05, .08, 'square'); }
 };
 
 // ---------------------------------------------------------- оружие
@@ -494,7 +544,7 @@ const DIFFS = {
     react: [.85, 1.5],                                  // почти полторы секунды на реакцию
     acc: .2, accFall: 14,                               // мажут почти всегда
     rof: 2.4, hs: .01, dmg: .55,                        // редкие выстрелы, слабый урон
-    speed: .65, sight: 12, hearing: 7, memory: 3
+    speed: .65, sight: 12, hearing: 7, memory: 3, bomb: [55, 4.5, 4]
   },
   normal: {
     label: 'Средняя', money: 800,
@@ -504,7 +554,7 @@ const DIFFS = {
     react: [.22, .5],
     acc: .62, accFall: 30,
     rof: 1, hs: .12, dmg: 1,
-    speed: 1, sight: 24, hearing: 14, memory: 7
+    speed: 1, sight: 24, hearing: 14, memory: 7, bomb: [40, 3.2, 5]
   },
   hard: {
     label: 'Сложная', money: 800,
@@ -514,7 +564,7 @@ const DIFFS = {
     react: [.13, .3],
     acc: .85, accFall: 40,
     rof: .85, hs: .2, dmg: 1.15,
-    speed: 1.15, sight: 26, hearing: 18, memory: 9
+    speed: 1.15, sight: 26, hearing: 18, memory: 9, bomb: [35, 3.2, 6]
   }
 };
 
@@ -526,15 +576,18 @@ const G = {
   phase: 'live',          // live | end
   endAt: 0, endWin: false,
   diff: DIFFS.easy, quality: 1,
-  time: 0, shake: 0, flash: 0, hurt: 0, hitmark: 0, hitHS: false
+  time: 0, shake: 0, flash: 0, hurt: 0, hitmark: 0, hitHS: false,
+  bomb: null, bombTime: 40, plantTime: 3.2, defuseTime: 5,
+  dmgDir: 0, dmgT: -9
 };
 const P = {
   x: 0, y: 0, ang: 0, pitch: 0, recV: 0, recH: 0,
   hp: 100, armor: 0, helmet: false, money: 800, alive: true,
   cur: 'glock', nades: 0, guns: {}, nextFire: 0, reloadEnd: 0,
-  scoped: false, bob: 0, kills: 0, deaths: 0, vx: 0, vy: 0, footT: 0
+  scoped: false, bob: 0, kills: 0, deaths: 0, vx: 0, vy: 0, footT: 0,
+  eye: .5, crouch: 0, sprayI: 0, lastShot: -9
 };
-const bots = [], nades = [], fx = [], feed = [];
+const bots = [], nades = [], fx = [], feed = [], parts = [], shells = [];
 
 function giveGun(key) {
   const w = WEAPONS[key];
@@ -615,6 +668,8 @@ const BOT_LOADOUT = [
   ['glock', 'glock', 'usp'], ['glock', 'usp', 'mp5'], ['mp5', 'usp', 'ak'],
   ['ak', 'mp5', 'deagle'], ['ak', 'ak', 'm4'], ['ak', 'm4', 'awp']
 ];
+const BOT_NAMES = ['Фантом', 'Барс', 'Кобра', 'Сокол', 'Викинг', 'Гюрза',
+                   'Ворон', 'Тень', 'Шакал', 'Титан', 'Рысь', 'Скорпион'];
 function spawnBots() {
   bots.length = 0;
   const D = G.diff;
@@ -630,9 +685,13 @@ function spawnBots() {
       mag: 30, reloadEnd: 0, nextFire: 0, reactAt: 0,
       alertAt: -99, lastX: s.x, lastY: s.y, step: null, pathAt: 0,
       goal: openTiles[(Math.random() * openTiles.length) | 0],
-      strafe: Math.random() < .5 ? 1 : -1, strafeAt: 0
+      strafe: Math.random() < .5 ? 1 : -1, strafeAt: 0,
+      hasBomb: false, planting: 0, pickup: false,
+      name: BOT_NAMES[(i + ((Math.random() * BOT_NAMES.length) | 0)) % BOT_NAMES.length]
     });
   }
+  resetBomb();
+  bots[(Math.random() * bots.length) | 0].hasBomb = true;   // один несёт C4
 }
 function botSees(b) {
   return P.alive && Math.hypot(P.x - b.x, P.y - b.y) < G.diff.sight && losClear(b.x, b.y, P.x, P.y);
@@ -653,16 +712,38 @@ function updateBot(b, dt) {
   b.ang = sees ? Math.atan2(P.y - b.y, P.x - b.x)
                : lerp(b.ang, Math.atan2(b.lastY - b.y, b.lastX - b.x), .08);
 
+  // --- закладка бомбы: носитель идёт на точку и замирает
+  const bmb = G.bomb;
+  if (b.planting) {
+    if (t - b.planting >= G.plantTime) plantBomb(b);
+    return;                                          // во время закладки не двигается и не стреляет
+  }
+  if (b.hasBomb && bmb && bmb.state === 'carried') {
+    const site = bmb.site;
+    if (Math.hypot(site.x - b.x, site.y - b.y) < .8) { b.planting = t; SFX.defuse(); return; }
+  }
+
   // --- перемещение
   let tx, ty, speed;
-  if (alerted) { tx = b.lastX; ty = b.lastY; speed = 2.5 * D.speed; }
-  else {
+  if (b.hasBomb && bmb && bmb.state === 'carried') { // несёт бомбу — идёт на точку
+    tx = bmb.site.x; ty = bmb.site.y; speed = 2.3 * D.speed;
+  } else if (b.pickup && bmb && bmb.state === 'dropped') {
+    tx = bmb.x; ty = bmb.y; speed = 2.4 * D.speed;
+  } else if (alerted) { tx = b.lastX; ty = b.lastY; speed = 2.5 * D.speed; }
+  else if (bmb && bmb.state === 'planted') {         // после закладки — держат точку
+    if (!b.goal || Math.hypot(b.goal.x - b.x, b.goal.y - b.y) < .8 ||
+        Math.hypot(b.goal.x - bmb.x, b.goal.y - bmb.y) > 6) {
+      const near = openTiles.filter(o => Math.hypot(o.x - bmb.x, o.y - bmb.y) < 5);
+      b.goal = near.length ? near[(Math.random() * near.length) | 0] : b.goal;
+    }
+    tx = b.goal ? b.goal.x : bmb.x; ty = b.goal ? b.goal.y : bmb.y; speed = 1.7 * D.speed;
+  } else {
     if (!b.goal || Math.hypot(b.goal.x - b.x, b.goal.y - b.y) < .8)
       b.goal = openTiles[(Math.random() * openTiles.length) | 0];
     tx = b.goal.x; ty = b.goal.y; speed = 1.7 * D.speed;
   }
   if (t > b.pathAt) { b.pathAt = t + .35; b.step = nextStep(b.x, b.y, tx, ty); }
-  if (sees && dist < 5.5) {                       // ближний бой — стрейф
+  if (sees && dist < 5.5 && !b.hasBomb && !b.pickup) {   // ближний бой — стрейф
     if (t > b.strafeAt) { b.strafeAt = t + rnd(.6, 1.6); b.strafe = -b.strafe; }
     const a = b.ang + Math.PI / 2 * b.strafe;
     moveEntity(b, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt, .3);
@@ -680,12 +761,95 @@ function updateBot(b, dt) {
     const vol = clamp(1.6 / (1 + dist * .35), .05, 1);
     SFX.shot(w, vol);
     // точность падает с дистанцией; на лёгком боты мажут почти всегда
-    const acc = clamp((1 - dist / D.accFall) * D.acc, .03, .9);
+    const acc = clamp((1 - dist / D.accFall) * D.acc * (P.crouch ? .85 : 1), .03, .9);
     if (Math.random() < acc) {
       const head = Math.random() < D.hs;
       let dmg = w.dmg * D.dmg * clamp(1 - dist * .012, .55, 1);
       if (head) dmg *= P.helmet ? w.hs * .38 : w.hs;
       hurtPlayer(dmg, b, head);
+    }
+  }
+}
+
+// ---------------------------------------------------------- бомба C4
+// Один из террористов несёт C4 и идёт закладывать её на точку A или B.
+// Если носителя убить, бомбу подберёт следующий. После закладки у игрока
+// есть 40 секунд, чтобы разминировать её (удерживать E рядом).
+const SITES = [];
+function initSites() {
+  SITES.length = 0;
+  for (const m of marks.A) SITES.push({ x: m.x, y: m.y, name: 'A' });
+  for (const m of marks.B) SITES.push({ x: m.x, y: m.y, name: 'B' });
+  if (!SITES.length) SITES.push({ x: openTiles[0].x, y: openTiles[0].y, name: 'A' });
+}
+function resetBomb() {
+  const site = SITES[(Math.random() * SITES.length) | 0];
+  G.bomb = { state: 'carried', x: 0, y: 0, site: site, plantAt: 0, planted: 0,
+             defuse: 0, beepAt: 0, defuseBeep: 0 };
+}
+function bombCarrier() { return bots.find(b => b.alive && b.hasBomb) || null; }
+function dropBomb(b) {
+  if (!b.hasBomb || !G.bomb || G.bomb.state !== 'carried') return;
+  b.hasBomb = false;
+  G.bomb.state = 'dropped'; G.bomb.x = b.x; G.bomb.y = b.y;
+}
+function plantBomb(b) {
+  G.bomb.state = 'planted'; G.bomb.x = b.x; G.bomb.y = b.y;
+  G.bomb.planted = G.time; b.hasBomb = false; b.planting = 0;
+  SFX.plant();
+  showMsg('БОМБА ЗАЛОЖЕНА НА ' + G.bomb.site.name, 'Удерживай E рядом с ней, чтобы обезвредить');
+}
+function bombExplode() {
+  const bmb = G.bomb;
+  bmb.state = 'exploded';
+  SFX.boom(); G.shake = 1.4; G.flash = 1;
+  fx.push({ type: 'boom', x: bmb.x, y: bmb.y, z: .4, t: G.time + .7, born: G.time });
+  const d = Math.hypot(P.x - bmb.x, P.y - bmb.y);
+  if (P.alive && d < 9) { P.armor = 0; hurtPlayer(400, null, false); }
+  endRound(false, 'Бомба взорвалась');
+}
+// время раунда вышло: если бомбу не заложили — раунд за CT (как в CS)
+function checkRoundTime() {
+  if (G.phase !== 'live' || G.roundT <= G.roundLen) return;
+  if (G.bomb && G.bomb.state === 'planted') return;      // теперь считает таймер C4
+  endRound(true, 'Время вышло, бомба не заложена');
+}
+function updateBomb(dt) {
+  const bmb = G.bomb;
+  if (!bmb || G.phase !== 'live') return;
+
+  if (bmb.state === 'planted') {
+    const left = G.bombTime - (G.time - bmb.planted);
+    if (left <= 0) { bombExplode(); return; }
+    if (G.time > bmb.beepAt) {                       // писк ускоряется к взрыву
+      bmb.beepAt = G.time + clamp(.14 + (left / G.bombTime) * .9, .14, 1.05);
+      SFX.beep(left < 10 ? 1500 : 1100);
+    }
+    // разминирование: удерживать E рядом
+    const near = P.alive && Math.hypot(P.x - bmb.x, P.y - bmb.y) < 1.5;
+    if (near && keys['e']) {
+      bmb.defuse += dt;
+      if (G.time > bmb.defuseBeep) { bmb.defuseBeep = G.time + .3; SFX.defuse(); }
+      if (bmb.defuse >= G.defuseTime) {
+        bmb.state = 'defused';
+        endRound(true, 'Бомба обезврежена');
+      }
+    } else bmb.defuse = Math.max(0, bmb.defuse - dt * 1.5);
+    return;
+  }
+
+  // никто не несёт — ближайший бот идёт подбирать
+  if (bmb.state === 'dropped') {
+    let best = null, bd = 1e9;
+    for (const b of bots) {
+      b.pickup = false;
+      if (!b.alive) continue;
+      const d = Math.hypot(b.x - bmb.x, b.y - bmb.y);
+      if (d < bd) { bd = d; best = b; }
+    }
+    if (best) {
+      best.pickup = true;
+      if (bd < .7) { best.hasBomb = true; best.pickup = false; bmb.state = 'carried'; }
     }
   }
 }
@@ -699,11 +863,12 @@ function hurtPlayer(dmg, src, head) {
   if (!P.alive) return;
   dmg = applyArmor(dmg, P);
   P.hp -= dmg;
+  if (src) { G.dmgDir = Math.atan2(src.y - P.y, src.x - P.x); G.dmgT = G.time + 1.3; }
   G.hurt = 1; G.shake = Math.min(1, G.shake + dmg / 120);
   SFX.hurt();
   if (P.hp <= 0) {
     P.hp = 0; P.alive = false; P.deaths++;
-    addFeed(src ? WEAPONS[src.weapon].name : 'Взрыв', 'ТЫ', head, false);
+    addFeed(src ? (src.name || 'Террорист') : 'Взрыв', 'ТЫ', head, false);
     endRound(false);
   }
 }
@@ -713,10 +878,11 @@ function hurtBot(b, dmg, head, wkey) {
   G.hitmark = .18; G.hitHS = !!head;
   head ? SFX.hs() : SFX.hit();
   if (b.hp <= 0 && b.alive) {
-    b.alive = false; b.deadAt = G.time; P.kills++;
+    b.alive = false; b.deadAt = G.time; b.planting = 0; dropBomb(b); P.kills++;
     P.money = Math.min(16000, P.money + (WEAPONS[wkey] ? WEAPONS[wkey].reward : 300));
-    addFeed('ТЫ', 'Террорист', head, true);
-    if (bots.every(x => !x.alive)) endRound(true);
+    addFeed('ТЫ', b.name || 'Террорист', head, true);
+    if (bots.every(x => !x.alive) && G.bomb && G.bomb.state !== 'planted')
+      endRound(true, 'Террористы уничтожены');
   }
 }
 function addFeed(killer, victim, head, byPlayer) {
@@ -725,6 +891,49 @@ function addFeed(killer, victim, head, byPlayer) {
 }
 
 // ---------------------------------------------------------- стрельба игрока
+// Отдача автоматов идёт по узнаваемому рисунку: сначала строго вверх,
+// потом уводит влево, дальше мотает вправо-влево. Его можно выучить и
+// компенсировать мышью, как в CS.
+function sprayKick(w, i) {
+  const v = w.recoil * (i < 3 ? 1 : i < 8 ? .78 : .55);
+  let h;
+  if (i < 3)      h = w.recoil * rnd(-.08, .08);
+  else if (i < 9) h = -w.recoil * .32;
+  else            h = w.recoil * .42 * ((((i - 9) / 3) | 0) % 2 ? -1 : 1);
+  return [h + w.recoil * rnd(-.06, .06), v];
+}
+function spawnParts(x, y, z, n, kind) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd(0, 6.283), sp = kind === 'blood' ? rnd(.5, 2.2) : rnd(1, 4);
+    parts.push({
+      x: x, y: y, z: z,
+      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: rnd(.5, 3.4),
+      die: G.time + (kind === 'blood' ? .55 : .35),
+      r: kind === 'blood' ? .035 : .022,
+      c: kind === 'blood' ? packRGB(rnd(110, 175), 14, 16)
+                          : packRGB(255, rnd(180, 240), rnd(70, 150))
+    });
+  }
+  while (parts.length > 260) parts.shift();
+}
+function updateParts(dt) {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const q = parts[i];
+    q.vz -= 11 * dt;
+    const nx = q.x + q.vx * dt, ny = q.y + q.vy * dt;
+    if (solid(nx, ny) || q.z + q.vz * dt < .02 || G.time > q.die) {
+      if (G.time > q.die) { parts.splice(i, 1); continue; }
+      q.vx *= .3; q.vy *= .3; q.vz = Math.abs(q.vz) * .25;
+    } else { q.x = nx; q.y = ny; }
+    q.z = Math.max(.02, q.z + q.vz * dt);
+  }
+  for (let i = shells.length - 1; i >= 0; i--) {
+    const sh = shells[i];
+    sh.vy += 2400 * dt; sh.x += sh.vx * dt; sh.y += sh.vy * dt; sh.rot += sh.vr * dt;
+    sh.life -= dt;
+    if (sh.life <= 0) shells.splice(i, 1);
+  }
+}
 function viewPitch() { return clamp(P.pitch + P.recV, -1.05, 1.05); }
 function viewAng()   { return P.ang + P.recH; }
 function moveSpeed() { return Math.hypot(P.vx, P.vy); }
@@ -732,6 +941,7 @@ function currentSpread() {
   const w = WEAPONS[P.cur];
   if (!w.spread) return 0;
   let s = w.spread * (1 + moveSpeed() * .55);
+  if (P.crouch && moveSpeed() < .15) s *= .55;      // присед — заметно точнее
   if (P.scoped && w.scope) s *= .12;
   return s;
 }
@@ -755,10 +965,21 @@ function fire() {
 
   const g = curGun();
   if (!g || g.mag <= 0) { SFX.dry(); P.nextFire = t + .25; reload(); return; }
-  g.mag--; P.nextFire = t + w.rate;
+  g.mag--;
+  P.sprayI = (t - P.lastShot < .35) ? P.sprayI + 1 : 0;      // серия продолжается
+  P.lastShot = t;
+  P.nextFire = t + w.rate;
   SFX.shot(w);
-  P.recV += w.recoil * .0042;                                // отдача уводит прицел вверх
-  P.recH += rnd(-1, 1) * w.recoil * .0022;
+  if (w.auto) {                                              // автоматы — по рисунку
+    const [kh, kv] = sprayKick(w, P.sprayI);
+    P.recV += kv * .0042; P.recH += kh * .0022;
+  } else {
+    P.recV += w.recoil * .0042;
+    P.recH += rnd(-1, 1) * w.recoil * .0022;
+  }
+  shells.push({ x: 0, y: 0, vx: rnd(160, 260), vy: rnd(-420, -280),
+                rot: rnd(0, 6.283), vr: rnd(-14, 14), life: 1.1 });
+  if (shells.length > 24) shells.shift();
   G.shake = Math.min(1, G.shake + w.recoil * .022);
   fx.push({ type: 'muzzle', t: t + .05 });
 
@@ -775,7 +996,7 @@ function fire() {
     if (along <= .1 || along > 60) continue;
     const perp = Math.hypot(vx - dx * along, vy - dy * along);
     if (perp > .3) continue;
-    const h = .5 + slope * along;                            // высота попадания (0 — пол, 1 — макушка)
+    const h = P.eye + slope * along;                         // высота попадания (0 — пол, 1 — макушка)
     if (h < .04 || h > .95) continue;
     if (along < tDist) { tDist = along; target = b; head = h > .74; }
   }
@@ -784,8 +1005,10 @@ function fire() {
     let dmg = w.dmg * clamp(1 - tDist * .01, .5, 1);
     if (head) dmg *= w.hs;
     hurtBot(target, dmg, head, P.cur);
+    spawnParts(P.x + dx * tDist, P.y + dy * tDist, P.eye + slope * tDist, head ? 12 : 7, 'blood');
   } else {
-    fx.push({ type: 'puff', x: P.x + dx * wall, y: P.y + dy * wall, t: t + .25 });
+    spawnParts(P.x + dx * (wall - .05), P.y + dy * (wall - .05),
+               clamp(P.eye + slope * wall, .05, .95), 7, 'spark');
   }
   // выстрел слышно — боты настораживаются
   for (const b of bots) if (b.alive && Math.hypot(b.x - P.x, b.y - P.y) < G.diff.hearing) {
@@ -810,13 +1033,13 @@ function switchTo(slot) {
   const k = weaponInSlot(slot);
   if (!k || k === P.cur) return;
   reloadId++;                                    // отменяем незавершённую перезарядку
-  P.cur = k; P.scoped = false; P.nextFire = G.time + .25; P.reloadEnd = 0;
+  P.cur = k; P.scoped = false; P.nextFire = G.time + .25; P.reloadEnd = 0; P.sprayI = 0;
 }
 function throwNade() {
   if (P.nades <= 0 || !P.alive || G.time < P.nextFire) return;
   P.nades--; P.nextFire = G.time + .8;
   const a = viewAng(), sl = viewPitch();
-  nades.push({ x: P.x, y: P.y, z: .55, vx: Math.cos(a) * 9, vy: Math.sin(a) * 9,
+  nades.push({ x: P.x, y: P.y, z: P.eye + .05, vx: Math.cos(a) * 9, vy: Math.sin(a) * 9,
                vz: 2.4 + sl * 9, born: G.time });
 }
 function updateNades(dt) {
@@ -854,21 +1077,25 @@ function startRound() {
   const s = marks.C.length ? marks.C[(Math.random() * marks.C.length) | 0] : openTiles[0];
   P.x = s.x; P.y = s.y; P.ang = Math.PI; P.pitch = 0; P.recV = P.recH = 0;
   P.hp = 100; P.alive = true; P.scoped = false; P.nextFire = 0; P.reloadEnd = 0;
+  P.eye = .5; P.crouch = 0; P.sprayI = 0; P.lastShot = -9;
+  parts.length = 0; shells.length = 0;
   for (const k in P.guns) { P.guns[k].mag = WEAPONS[k].mag; P.guns[k].res = WEAPONS[k].res; }
   if (!weaponInSlot(2)) giveGun('glock');
   P.cur = weaponInSlot(1) || weaponInSlot(2) || 'knife';
+  G.bombTime = G.diff.bomb[0]; G.plantTime = G.diff.bomb[1]; G.defuseTime = G.diff.bomb[2];
   nades.length = 0; fx.length = 0;
-  spawnBots();
+  spawnBots();                                 // spawnBots сам раскладывает C4
   G.roundT = 0; G.phase = 'live'; G.state = 'play';
   SFX.start(); showMsg('РАУНД ' + G.round, 'Магазин — клавиша B (20 сек)');
 }
-function endRound(win) {
+function endRound(win, reason) {
   if (G.phase === 'end') return;
   G.phase = 'end'; G.endAt = G.time + 4; G.endWin = win;
   if (win) {
     G.winsCT++; lossStreak = 0;
-    P.money = Math.min(16000, P.money + 3250);
-    SFX.win(); showMsg('РАУНД ВЫИГРАН', '+$3250');
+    const bonus = reason === 'Бомба обезврежена' ? 3500 : 3250;
+    P.money = Math.min(16000, P.money + bonus);
+    SFX.win(); showMsg('РАУНД ВЫИГРАН', (reason ? reason + ' · ' : '') + '+$' + bonus);
   } else {
     G.winsT++;
     P.money = Math.min(16000, P.money + 1400 + Math.min(3, lossStreak) * 500);
@@ -876,7 +1103,8 @@ function endRound(win) {
     // при смерти теряется основное оружие
     for (const k in P.guns) if (slotOf(k) === 1) delete P.guns[k];
     P.armor = 0; P.helmet = false; P.nades = 0;
-    SFX.lose(); showMsg('РАУНД ПРОИГРАН', '+$' + (1400 + Math.min(3, lossStreak - 1) * 500));
+    SFX.lose(); showMsg('РАУНД ПРОИГРАН',
+      (reason ? reason + ' · ' : '') + '+$' + (1400 + Math.min(3, lossStreak - 1) * 500));
   }
 }
 function nextRound() {
@@ -941,7 +1169,7 @@ function toggleBuy(force) {
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d', { alpha: false });
 const keys = Object.create(null);
-let mouseDown = false, sens = .0022;
+let mouseDown = false, sens = .0022, sensMul = 1, invertY = false;
 
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
@@ -971,9 +1199,9 @@ addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; });
 addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('mousemove', e => {
   if (document.pointerLockElement !== cv) return;
-  const s = sens * (P.scoped ? .35 : 1);
+  const s = sens * sensMul * (P.scoped ? .35 : 1);
   P.ang += e.movementX * s;
-  P.pitch = clamp(P.pitch - e.movementY * s * .9, -1, 1);
+  P.pitch = clamp(P.pitch - (invertY ? -e.movementY : e.movementY) * s * .9, -1, 1);
 });
 let wasLocked = false;
 function requestLock() {
@@ -1023,20 +1251,15 @@ function renderWorld() {
   const ph = (viewPitch() + bobY) * RH;
   const half = RH / 2;
 
-  // --- потолок и пол
+  // --- потолок и пол (высота глаз меняется при приседании)
+  const eye = P.eye, ceilH = (1 - eye) * RH, floorH = eye * RH;
   for (let y = 0; y < RH; y++) {
     const p = y - half - ph;
     const isFloor = p > 0;
-    const rowDist = isFloor ? (half / p) : (p < 0 ? (half / -p) : 1e4);
+    const rowDist = isFloor ? (floorH / p) : (p < 0 ? (ceilH / -p) : 1e4);
     const lvl = shadeLevel(rowDist);
     const row = y * RW;
-    if (!isFloor) {                                     // потолок — ровный тон
-      const f = (lvl + 1) / LEVELS;
-      const c = packRGB(52 * f, 58 * f, 70 * f);
-      buf32.fill(c, row, row + RW);
-      continue;
-    }
-    const tex = FLOOR_TEX[lvl];
+    const tex = isFloor ? FLOOR_TEX[lvl] : CEIL_TEX[lvl];
     let fx0 = P.x + rowDist * (dirX - planeX), fy0 = P.y + rowDist * (dirY - planeY);
     const stepX = rowDist * 2 * planeX / RW, stepY = rowDist * 2 * planeY / RW;
     for (let x = 0; x < RW; x++) {
@@ -1067,7 +1290,7 @@ function renderWorld() {
     if (!tex) continue;
 
     const lineH = RH / dist;
-    const top = half + ph - lineH * .5;
+    const top = half + ph - lineH * (1 - P.eye);
     let y0 = Math.max(0, Math.ceil(top)), y1 = Math.min(RH - 1, Math.floor(top + lineH));
     let wallX = side === 0 ? P.y + dist * rdy : P.x + dist * rdx;
     wallX -= Math.floor(wallX);
@@ -1090,6 +1313,9 @@ function renderWorld() {
     else if (G.time - b.deadAt < 25) list.push({ x: b.x, y: b.y, s: SPR.corpseT, hb: 0, ht: .32, w: 1.1 });
   }
   for (const n of nades) list.push({ x: n.x, y: n.y, s: SPR.nade, hb: n.z - .07, ht: n.z + .07, w: .16 });
+  if (G.bomb && (G.bomb.state === 'planted' || G.bomb.state === 'dropped'))
+    list.push({ x: G.bomb.x, y: G.bomb.y, s: SPR.bomb, hb: .02, ht: .26, w: .3,
+                bright: G.bomb.state === 'planted' && (G.time * 4 % 1) < .5 });
   for (const f of fx) if (f.type === 'boom') {
     const k = clamp((G.time - f.born) / .45, 0, 1), r = .8 + k * 2.6;
     list.push({ x: f.x, y: f.y, s: SPR.boom, hb: f.z - r, ht: f.z + r, w: r * 2, bright: true });
@@ -1103,8 +1329,8 @@ function renderWorld() {
     const tz = invDet * (-planeY * dx + planeX * dy);
     if (tz < .18) continue;
     const scrX = (RW / 2) * (1 + tx / tz);
-    const yTop = half + ph - ((sp.ht - .5) * RH) / tz;
-    const yBot = half + ph - ((sp.hb - .5) * RH) / tz;
+    const yTop = half + ph - ((sp.ht - P.eye) * RH) / tz;
+    const yBot = half + ph - ((sp.hb - P.eye) * RH) / tz;
     const hPix = yBot - yTop, wPix = (sp.w * RH) / tz;
     if (hPix < 1 || wPix < 1) continue;
     const x0 = Math.max(0, Math.ceil(scrX - wPix / 2)), x1 = Math.min(RW - 1, Math.floor(scrX + wPix / 2));
@@ -1120,6 +1346,24 @@ function renderWorld() {
         if (v < 0 || v >= sh) continue;
         const c = data[v * sw + u];
         if (c) buf32[y * RW + x] = c;
+      }
+    }
+  }
+  // --- частицы (искры, кровь)
+  for (const q of parts) {
+    const dx = q.x - P.x, dy = q.y - P.y;
+    const tx = invDet * (dirY * dx - dirX * dy);
+    const tz = invDet * (-planeY * dx + planeX * dy);
+    if (tz < .12) continue;
+    const sx = ((RW / 2) * (1 + tx / tz)) | 0;
+    if (sx < 0 || sx >= RW || tz >= zbuf[sx]) continue;
+    const sy = (half + ph - ((q.z - P.eye) * RH) / tz) | 0;
+    const sz = Math.max(1, Math.min(6, (q.r * RH / tz) | 0));
+    for (let yy = sy; yy < sy + sz; yy++) {
+      if (yy < 0 || yy >= RH) continue;
+      for (let xx = sx; xx < sx + sz; xx++) {
+        if (xx < 0 || xx >= RW || tz >= zbuf[xx]) continue;
+        buf32[yy * RW + xx] = q.c;
       }
     }
   }
@@ -1147,6 +1391,31 @@ function drawScreen() {
   }
   if (!P.alive) { ctx.fillStyle = 'rgba(30,0,0,.45)'; ctx.fillRect(0, 0, cw, chh); }
 
+  if (shells.length) {                                    // вылетающие гильзы
+    ctx.save();
+    ctx.translate(cw * .66, chh * .74);
+    for (const sh of shells) {
+      ctx.save();
+      ctx.translate(sh.x * scale, sh.y * scale); ctx.rotate(sh.rot);
+      ctx.globalAlpha = clamp(sh.life, 0, 1);
+      ctx.fillStyle = '#c9a24a';
+      ctx.fillRect(-4 * scale, -2 * scale, 9 * scale, 4 * scale);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1; ctx.restore();
+  }
+  if (G.time < G.dmgT && P.alive) {                      // откуда прилетело
+    const a = G.dmgDir - viewAng();
+    const k = clamp((G.dmgT - G.time) / 1.3, 0, 1);
+    ctx.save();
+    ctx.translate(cw / 2, chh / 2); ctx.rotate(a + Math.PI / 2);
+    ctx.strokeStyle = 'rgba(232,86,74,' + (k * .85) + ')';
+    ctx.lineWidth = 7 * scale;
+    ctx.beginPath();
+    ctx.arc(0, 0, chh * .19, -Math.PI / 2 - .34, -Math.PI / 2 + .34);
+    ctx.stroke();
+    ctx.restore();
+  }
   if (P.alive && !(P.scoped && WEAPONS[P.cur].scope)) drawCrosshair(cw, chh, scale);
   drawMinimap(scale);
 }
@@ -1245,6 +1514,15 @@ function drawMinimap(s) {
   ctx.fillStyle = '#e8564a';
   for (const b of bots) if (b.alive && (botSees(b) || G.time - b.alertAt < 1.5))
     ctx.fillRect(b.x * cell - cell * .6, b.y * cell - cell * .6, cell * 1.2, cell * 1.2);
+  ctx.font = 'bold ' + (9 * s) + 'px Consolas, monospace';                 // точки закладки
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(224,176,96,.75)';
+  for (const site of SITES) ctx.fillText(site.name, site.x * cell, site.y * cell);
+  if (G.bomb && G.bomb.state === 'planted') {                               // заложенная C4
+    const pulse = (G.time * 4 % 1) < .5;
+    ctx.fillStyle = pulse ? '#ff5a4a' : '#8a2a24';
+    ctx.fillRect(G.bomb.x * cell - cell, G.bomb.y * cell - cell, cell * 2, cell * 2);
+  }
   ctx.fillStyle = '#61a8ff';
   ctx.save(); ctx.translate(P.x * cell, P.y * cell); ctx.rotate(P.ang);
   ctx.beginPath(); ctx.moveTo(cell, 0); ctx.lineTo(-cell * .7, cell * .7);
@@ -1271,15 +1549,27 @@ function updateHUD() {
   $('magv').textContent = g ? g.mag : '—';
   $('resv').textContent = g ? ' / ' + g.res : '';
   $('nades').textContent = 'Гранаты: ' + P.nades + (P.nades ? '  [G]' : '');
-  const left = Math.max(0, G.roundLen - G.roundT);
+  const bmb = G.bomb, planted = bmb && bmb.state === 'planted';
+  const left = planted ? Math.max(0, G.bombTime - (G.time - bmb.planted))
+                       : Math.max(0, G.roundLen - G.roundT);
   $('timer').textContent = ((left / 60) | 0) + ':' + ('0' + ((left % 60) | 0)).slice(-2);
+  $('timer').className = planted ? 'bomb' : '';
+  $('bombline').style.display = planted ? 'block' : 'none';
+  if (planted) $('bombline').textContent = 'C4 НА ТОЧКЕ ' + bmb.site.name +
+    (Math.hypot(P.x - bmb.x, P.y - bmb.y) < 1.5 ? ' — ДЕРЖИ E' : '');
+  const def = planted && bmb.defuse > .02;
+  $('defuse').style.display = def ? 'block' : 'none';
+  if (def) $('defusefill').style.width = (bmb.defuse / G.defuseTime * 100).toFixed(0) + '%';
   $('score').innerHTML = '<span class="ct">CT ' + G.winsCT + '</span> : <span class="t">' + G.winsT + ' T</span>';
   const alive = bots.filter(b => b.alive).length;
   $('roundinfo').textContent = 'Раунд ' + G.round + ' · врагов: ' + alive + ' · K/D ' + P.kills + '/' + P.deaths;
   const locked = document.pointerLockElement === cv;
+  const nearBomb = planted && P.alive && Math.hypot(P.x - bmb.x, P.y - bmb.y) < 1.5;
   $('hint').innerHTML = !locked ? 'Кликни по экрану, чтобы управлять мышью'
-                                : 'Нажми <b>B</b> — магазин';
-  $('hint').style.display = (!locked && G.state === 'play') || canBuy() ? '' : 'none';
+                      : nearBomb ? 'Удерживай <b>E</b> — обезвредить'
+                                 : 'Нажми <b>B</b> — магазин';
+  $('hint').style.display =
+    (!locked && G.state === 'play') || nearBomb || canBuy() ? '' : 'none';
   if (G.time > msgT) $('centermsg').style.opacity = 0;
   const fe = $('feed');
   fe.innerHTML = feed.filter(f => G.time - f.t < 6).map(f =>
@@ -1292,6 +1582,10 @@ function updatePlayer(dt) {
   if (!P.alive) { P.vx = P.vy = 0; return; }
   const w = WEAPONS[P.cur];
   let base = w.cat === 'sniper' ? 3.0 : w.cat === 'rifle' ? 3.4 : w.cat === 'melee' ? 4.3 : 3.9;
+  const crouching = !!(keys['control'] || keys['c']);
+  P.crouch = crouching ? 1 : 0;
+  P.eye = lerp(P.eye, crouching ? .3 : .5, 1 - Math.exp(-14 * dt));
+  if (crouching) base *= .45;
   if (keys['shift']) base *= .5;
   if (P.scoped) base *= .35;
   let fx0 = 0, fy0 = 0;
@@ -1327,12 +1621,14 @@ function frame(ts) {
     updatePlayer(dt);
     for (const b of bots) updateBot(b, dt);
     updateNades(dt);
+    updateParts(dt);
+    updateBomb(dt);
     for (let i = fx.length - 1; i >= 0; i--) if (G.time > fx[i].t) fx.splice(i, 1);
     G.shake *= Math.exp(-6 * dt);
     G.hurt *= Math.exp(-2.2 * dt);
     G.flash *= Math.exp(-4 * dt);
     G.hitmark = Math.max(0, G.hitmark - dt);
-    if (G.phase === 'live' && G.roundT > G.roundLen) endRound(false);
+    checkRoundTime();
     if (G.phase === 'end' && G.time > G.endAt) nextRound();
   }
   renderWorld();
@@ -1365,11 +1661,36 @@ $('resumebtn').onclick = () => {
   G.state = 'play';
   requestLock();
 };
+// --- настройки хранятся между запусками
+function saveSettings() {
+  try {
+    localStorage.setItem('cs2lite', JSON.stringify({
+      diff: $('diff').value, qual: $('qual').value, sens: sensMul, inv: invertY
+    }));
+  } catch (e) {}
+}
+function loadSettings() {
+  let cfg = null;
+  try { cfg = JSON.parse(localStorage.getItem('cs2lite') || 'null'); } catch (e) {}
+  if (cfg) {
+    if (DIFFS[cfg.diff]) { $('diff').value = cfg.diff; G.diff = DIFFS[cfg.diff]; }
+    if (cfg.qual !== undefined) $('qual').value = cfg.qual;
+    if (cfg.sens) sensMul = clamp(+cfg.sens, .4, 3);
+    invertY = !!cfg.inv;
+  }
+  $('sens').value = sensMul; $('sensv').textContent = sensMul.toFixed(1);
+  $('invy').checked = invertY;
+}
+$('sens').oninput = e => { sensMul = +e.target.value; $('sensv').textContent = sensMul.toFixed(1); saveSettings(); };
+$('invy').onchange = e => { invertY = e.target.checked; saveSettings(); };
 $('closebuy').onclick = () => toggleBuy(false);
-$('qual').onchange = e => setQuality(parseInt(e.target.value, 10));
-$('diff').onchange = e => { G.diff = DIFFS[e.target.value] || DIFFS.normal; };
+$('qual').onchange = e => { setQuality(parseInt(e.target.value, 10)); saveSettings(); };
+$('diff').onchange = e => { G.diff = DIFFS[e.target.value] || DIFFS.normal; saveSettings(); };
 
-setQuality(1);
+initSites();
+loadSettings();
+const q0 = parseInt($('qual').value, 10);
+setQuality(Number.isFinite(q0) ? clamp(q0, 0, QUAL.length - 1) : 1);
 resize();
 document.body.classList.add('inmenu');
 // стартовая заставка: тихо крутим камеру по карте
