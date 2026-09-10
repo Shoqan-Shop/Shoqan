@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Шахматы — игра против ботов</title>
+<style>
+  :root {
+    --bg: #302e2b; --panel: #262522; --panel2: #21201d; --line: #3d3b38;
+    --light: #ebecd0; --dark: #739552; --hl: rgba(255,241,98,.55);
+    --green: #81b64c; --green2: #95bb4a; --text: #e9e8e6; --dim: #a3a2a0;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", Roboto, Arial, sans-serif; user-select: none;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  #app { display: flex; gap: 18px; align-items: flex-start; max-width: 1080px; width: 100%; justify-content: center; }
+
+  /* ---------- доска ---------- */
+  #boardWrap { position: relative; }
+  #boardArea { display: flex; flex-direction: column; gap: 8px; }
+  #board {
+    position: relative; width: min(74vh, 560px); height: min(74vh, 560px);
+    border-radius: 6px; overflow: hidden; box-shadow: 0 12px 30px rgba(0,0,0,.45);
+    touch-action: none;
+  }
+  .sq { position: absolute; width: 12.5%; height: 12.5%; }
+  .sq.l { background: var(--light); } .sq.d { background: var(--dark); }
+  .coord { position: absolute; font-size: 11px; font-weight: 700; opacity: .85; pointer-events: none; }
+  .coord.f { right: 3px; bottom: 1px; } .coord.r { left: 3px; top: 1px; }
+  .coord.onl { color: var(--dark); } .coord.ond { color: var(--light); }
+
+  .layer { position: absolute; inset: 0; pointer-events: none; }
+  .mark { position: absolute; width: 12.5%; height: 12.5%; }
+  .mark.last { background: var(--hl); }
+  .mark.sel { background: rgba(255,241,98,.62); }
+  .mark.check { background: radial-gradient(circle at center, rgba(255,60,40,.95) 12%, rgba(255,60,40,.5) 42%, rgba(255,60,40,0) 72%); }
+  .hint { position: absolute; width: 12.5%; height: 12.5%; display: grid; place-items: center; }
+  .hint i { display: block; width: 30%; height: 30%; border-radius: 50%; background: rgba(0,0,0,.16); }
+  .hint.cap i { width: 92%; height: 92%; border-radius: 50%; background: none;
+                box-shadow: inset 0 0 0 7px rgba(0,0,0,.14); }
+
+  .piece {
+    position: absolute; width: 12.5%; height: 12.5%; cursor: grab; z-index: 3;
+    transition: transform .13s cubic-bezier(.2,.7,.4,1); will-change: transform;
+  }
+  .piece.dragging { transition: none; z-index: 9; cursor: grabbing; filter: drop-shadow(0 6px 8px rgba(0,0,0,.45)); }
+  .piece svg { width: 100%; height: 100%; display: block; }
+
+  /* превращение пешки */
+  #promo { position: absolute; inset: 0; background: rgba(0,0,0,.35); z-index: 20; display: none; }
+  #promoBox { position: absolute; width: 12.5%; background: #fff; border-radius: 4px;
+              box-shadow: 0 6px 20px rgba(0,0,0,.5); overflow: hidden; }
+  #promoBox div { width: 100%; aspect-ratio: 1; cursor: pointer; }
+  #promoBox div:hover { background: #d7e8bd; }
+
+  /* ---------- игроки ---------- */
+  .player { display: flex; align-items: center; gap: 10px; height: 44px; }
+  .ava { width: 40px; height: 40px; border-radius: 4px; display: grid; place-items: center;
+         font-size: 22px; background: #4a4844; flex: none; }
+  .pname { font-weight: 700; font-size: 15px; line-height: 1.2; }
+  .prat { font-size: 12px; color: var(--dim); font-weight: 400; }
+  .taken { display: flex; align-items: center; gap: 1px; height: 16px; margin-top: 2px; }
+  .taken svg { width: 15px; height: 15px; opacity: .85; }
+  .taken b { font-size: 12px; color: var(--dim); margin-left: 4px; }
+  .clock { margin-left: auto; background: var(--panel2); color: #cfcecc; font-weight: 700;
+           font-size: 20px; padding: 5px 12px; border-radius: 5px; font-variant-numeric: tabular-nums; }
+  .clock.run { background: #f0f0f0; color: #1c1b19; }
+  .clock.low { color: #e0564a; }
+
+  /* ---------- панель ---------- */
+  #panel { width: 320px; background: var(--panel); border-radius: 8px; overflow: hidden;
+           display: flex; flex-direction: column; max-height: min(74vh, 560px); }
+  #panelHead { padding: 12px 14px; background: var(--panel2); font-weight: 700; font-size: 14px;
+               letter-spacing: .4px; display: flex; align-items: center; gap: 8px; }
+  #status { font-size: 12px; color: var(--dim); font-weight: 400; margin-left: auto; }
+  #moves { flex: 1; overflow-y: auto; font-size: 14px; }
+  .mrow { display: grid; grid-template-columns: 42px 1fr 1fr; align-items: center; }
+  .mrow:nth-child(odd) { background: rgba(255,255,255,.03); }
+  .mno { color: var(--dim); font-size: 12px; text-align: center; padding: 6px 0; }
+  .mv { padding: 6px 8px; border-radius: 3px; cursor: default; font-weight: 600; }
+  .mv.cur { background: rgba(255,255,255,.12); }
+  #ctrls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 10px;
+           background: var(--panel2); }
+  .btn { border: 0; border-radius: 5px; padding: 9px 6px; font-size: 12px; font-weight: 700;
+         color: #ddd; background: #3c3b39; cursor: pointer; font-family: inherit; }
+  .btn:hover { background: #4a4844; }
+  .btn.main { grid-column: span 4; background: var(--green); color: #fff; font-size: 14px; padding: 11px; }
+  .btn.main:hover { background: var(--green2); }
+  .btn:disabled { opacity: .4; cursor: default; }
+
+  /* ---------- модальные окна ---------- */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.62); display: none;
+           align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal.show { display: flex; }
+  .card { background: var(--panel); border-radius: 10px; padding: 22px; width: min(560px, 96vw);
+          box-shadow: 0 20px 60px rgba(0,0,0,.6); max-height: 92vh; overflow-y: auto; }
+  .card h2 { margin: 0 0 4px; font-size: 22px; }
+  .card p.sub { margin: 0 0 16px; color: var(--dim); font-size: 14px; }
+  .lvls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+  .lvl { background: var(--panel2); border: 2px solid transparent; border-radius: 8px; padding: 10px 6px;
+         text-align: center; cursor: pointer; }
+  .lvl:hover { border-color: #55534f; }
+  .lvl.on { border-color: var(--green); background: #2f3a25; }
+  .lvl .face { font-size: 26px; }
+  .lvl .nm { font-size: 12px; font-weight: 700; margin-top: 3px; }
+  .lvl .el { font-size: 11px; color: var(--dim); }
+  .opts { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 18px; font-size: 13px; }
+  .opt b { display: block; color: var(--dim); font-weight: 400; margin-bottom: 6px; font-size: 12px; }
+  .seg { display: flex; background: var(--panel2); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; background: none; color: #ccc; padding: 8px 12px; cursor: pointer;
+                font-size: 13px; font-family: inherit; font-weight: 600; }
+  .seg button.on { background: var(--green); color: #fff; }
+  #resultIcon { font-size: 40px; text-align: center; }
+  #resultText { text-align: center; font-size: 22px; font-weight: 700; margin: 6px 0 2px; }
+  #resultSub { text-align: center; color: var(--dim); font-size: 14px; margin-bottom: 18px; }
+  .row2 { display: flex; gap: 10px; }
+  .row2 .btn { flex: 1; padding: 12px; font-size: 14px; }
+
+  @media (max-width: 900px) {
+    #app { flex-direction: column; align-items: center; }
+    #panel { width: min(74vh, 560px); max-height: 300px; }
+    #board { width: min(92vw, 560px); height: min(92vw, 560px); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="boardArea">
+    <div class="player" id="topPlayer">
+      <div class="ava" id="topAva">🤖</div>
+      <div>
+        <div class="pname" id="topName">Бот</div>
+        <div class="taken" id="topTaken"></div>
+      </div>
+      <div class="clock" id="topClock">10:00</div>
+    </div>
+    <div id="board">
+      <div class="layer" id="squares"></div>
+      <div class="layer" id="marks"></div>
+      <div class="layer" id="hints"></div>
+      <div id="pieces"></div>
+      <div id="promo"><div id="promoBox"></div></div>
+    </div>
+    <div class="player" id="botPlayer">
+      <div class="ava" id="botAva">🙂</div>
+      <div>
+        <div class="pname" id="botName">Вы</div>
+        <div class="taken" id="botTaken"></div>
+      </div>
+      <div class="clock" id="botClock">10:00</div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div id="panelHead">ПАРТИЯ <span id="status">ваш ход</span></div>
+    <div id="moves"></div>
+    <div id="ctrls">
+      <button class="btn" id="btnBack" title="Вернуть ход">↩ Назад</button>
+      <button class="btn" id="btnFlip" title="Перевернуть доску">⇅ Доска</button>
+      <button class="btn" id="btnHint" title="Подсказка">💡 Подсказка</button>
+      <button class="btn" id="btnResign" title="Сдаться">🏳 Сдаться</button>
+      <button class="btn main" id="btnNew">Новая партия</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal show" id="setup">
+  <div class="card">
+    <h2>Шахматы против ботов</h2>
+    <p class="sub">Выберите соперника, цвет и контроль времени.</p>
+    <div class="lvls" id="lvlGrid"></div>
+    <div class="opts">
+      <div class="opt"><b>Играю</b>
+        <div class="seg" id="sideSeg">
+          <button data-side="w" class="on">Белыми</button>
+          <button data-side="b">Чёрными</button>
+          <button data-side="r">Случайно</button>
+        </div>
+      </div>
+      <div class="opt"><b>Время</b>
+        <div class="seg" id="timeSeg">
+          <button data-time="0" class="on">Без часов</button>
+          <button data-time="10">10 мин</button>
+          <button data-time="5">5 мин</button>
+          <button data-time="3">3 мин</button>
+        </div>
+      </div>
+    </div>
+    <button class="btn main" id="btnStart" style="width:100%">Играть</button>
+  </div>
+</div>
+
+<div class="modal" id="result">
+  <div class="card" style="width:min(380px,96vw)">
+    <div id="resultIcon">🏆</div>
+    <div id="resultText">Победа</div>
+    <div id="resultSub">мат</div>
+    <div class="row2">
+      <button class="btn" id="btnRematch">Реванш</button>
+      <button class="btn main" id="btnNewFromResult" style="grid-column:auto">Новая партия</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================== ДВИЖОК ==================
+// Доска 0x88: индекс = ряд*16 + линия, поле вне доски определяется как (sq & 0x88).
+// Фигуры: 1..6 = пешка, конь, слон, ладья, ферзь, король (белые), +8 — чёрные.
+const PAWN = 1, KNIGHT = 2, BISHOP = 3, ROOK = 4, QUEEN = 5, KING = 6;
+const typeOf  = p => p & 7;
+const colorOf = p => (p >> 3) & 1;
+const onBoard = sq => (sq & 0x88) === 0;
+const fileOf  = sq => sq & 15;
+const rankOf  = sq => sq >> 4;
+const sqName  = sq => 'abcdefgh'[fileOf(sq)] + (rankOf(sq) + 1);
+const nameToSq = s => ('abcdefgh'.indexOf(s[0])) + (+s[1] - 1) * 16;
+
+const N_OFF = [33, 31, 18, 14, -33, -31, -18, -14];
+const B_OFF = [17, 15, -17, -15];
+const R_OFF = [16, -16, 1, -1];
+const K_OFF = [17, 16, 15, 1, -1, -17, -16, -15];
+
+// --- флаги хода
+const F_NORMAL = 0, F_DOUBLE = 1, F_EP = 2, F_CASTLE_K = 3, F_CASTLE_Q = 4;
+const mkMove = (from, to, cap, promo, flag) =>
+  from | (to << 7) | (cap << 14) | (promo << 18) | (flag << 22);
+const mFrom  = m => m & 127;
+const mTo    = m => (m >> 7) & 127;
+const mCap   = m => (m >> 14) & 15;
+const mPromo = m => (m >> 18) & 15;
+const mFlag  = m => (m >> 22) & 7;
+
+// --- случайные числа для хэша Зобриста (детерминированные)
+let _seed = 0x2f6e2b1;
+function rnd32() {
+  _seed ^= _seed << 13; _seed |= 0;
+  _seed ^= _seed >>> 17;
+  _seed ^= _seed << 5;  _seed |= 0;
+  return _seed >>> 0;
+}
+const zP = [], zC = [], zE = [];
+for (let p = 0; p < 15; p++) { zP[p] = []; for (let s = 0; s < 128; s++) zP[p][s] = [rnd32(), rnd32()]; }
+for (let c = 0; c < 16; c++) zC[c] = [rnd32(), rnd32()];
+for (let f = 0; f < 8; f++)  zE[f] = [rnd32(), rnd32()];
+const zSide = [rnd32(), rnd32()];
+
+// --- состояние
+const B = {
+  b: new Int8Array(128), side: 0, castling: 15, ep: -1,
+  half: 0, full: 1, kings: [4, 116], h1: 0, h2: 0, undo: []
+};
+function xorPiece(p, sq) { const z = zP[p][sq]; B.h1 ^= z[0]; B.h2 ^= z[1]; }
+function xorCastle(c)    { B.h1 ^= zC[c][0];  B.h2 ^= zC[c][1]; }
+function xorEp(f)        { B.h1 ^= zE[f][0];  B.h2 ^= zE[f][1]; }
+function xorSide()       { B.h1 ^= zSide[0];  B.h2 ^= zSide[1]; }
+function posKey() { return (B.h1 >>> 0) * 2097152 + (B.h2 >>> 11); }
+
+function setFEN(fen) {
+  B.b.fill(0); B.undo.length = 0;
+  const parts = fen.trim().split(/\s+/);
+  let sq = 112;                                   // a8
+  for (const ch of parts[0]) {
+    if (ch === '/') { sq -= 24; continue; }
+    if (ch >= '1' && ch <= '8') { sq += +ch; continue; }
+    const low = ch.toLowerCase();
+    const t = { p: PAWN, n: KNIGHT, b: BISHOP, r: ROOK, q: QUEEN, k: KING }[low];
+    const piece = t | (ch === low ? 8 : 0);
+    B.b[sq] = piece;
+    if (t === KING) B.kings[ch === low ? 1 : 0] = sq;
+    sq++;
+  }
+  B.side = parts[1] === 'b' ? 1 : 0;
+  B.castling = 0;
+  if (parts[2] && parts[2] !== '-') for (const ch of parts[2])
+    B.castling |= { K: 1, Q: 2, k: 4, q: 8 }[ch] || 0;
+  B.ep = (parts[3] && parts[3] !== '-') ? nameToSq(parts[3]) : -1;
+  B.half = +(parts[4] || 0); B.full = +(parts[5] || 1);
+  rehash();
+}
+function rehash() {
+  B.h1 = 0; B.h2 = 0;
+  for (let sq = 0; sq < 128; sq++) if (onBoard(sq) && B.b[sq]) xorPiece(B.b[sq], sq);
+  xorCastle(B.castling);
+  if (B.ep >= 0) xorEp(fileOf(B.ep));
+  if (B.side) xorSide();
+}
+function getFEN() {
+  let out = '';
+  for (let r = 7; r >= 0; r--) {
+    let empty = 0;
+    for (let f = 0; f < 8; f++) {
+      const p = B.b[r * 16 + f];
+      if (!p) { empty++; continue; }
+      if (empty) { out += empty; empty = 0; }
+      const ch = ' pnbrqk'[typeOf(p)];
+      out += colorOf(p) ? ch : ch.toUpperCase();
+    }
+    if (empty) out += empty;
+    if (r) out += '/';
+  }
+  let c = '';
+  if (B.castling & 1) c += 'K'; if (B.castling & 2) c += 'Q';
+  if (B.castling & 4) c += 'k'; if (B.castling & 8) c += 'q';
+  return out + ' ' + (B.side ? 'b' : 'w') + ' ' + (c || '-') + ' ' +
+         (B.ep >= 0 ? sqName(B.ep) : '-') + ' ' + B.half + ' ' + B.full;
+}
+
+// --- атака поля
+function attacked(sq, by) {
+  const pawnDir = by ? -16 : 16;                  // откуда бьёт пешка цвета by
+  for (const d of [-1, 1]) {
+    const from = sq - pawnDir + d;
+    if (onBoard(from)) { const p = B.b[from]; if (p && colorOf(p) === by && typeOf(p) === PAWN) return true; }
+  }
+  for (const o of N_OFF) {
+    const from = sq + o;
+    if (onBoard(from)) { const p = B.b[from]; if (p && colorOf(p) === by && typeOf(p) === KNIGHT) return true; }
+  }
+  for (const o of K_OFF) {
+    const from = sq + o;
+    if (onBoard(from)) { const p = B.b[from]; if (p && colorOf(p) === by && typeOf(p) === KING) return true; }
+  }
+  for (const o of B_OFF) {
+    for (let s = sq + o; onBoard(s); s += o) {
+      const p = B.b[s];
+      if (!p) continue;
+      if (colorOf(p) === by && (typeOf(p) === BISHOP || typeOf(p) === QUEEN)) return true;
+      break;
+    }
+  }
+  for (const o of R_OFF) {
+    for (let s = sq + o; onBoard(s); s += o) {
+      const p = B.b[s];
+      if (!p) continue;
+      if (colorOf(p) === by && (typeOf(p) === ROOK || typeOf(p) === QUEEN)) return true;
+      break;
+    }
+  }
+  return false;
+}
+const inCheck = c => attacked(B.kings[c], c ^ 1);
+
+// --- генерация псевдолегальных ходов
+function genMoves(capturesOnly) {
+  const us = B.side, them = us ^ 1, list = [];
+  const push = (from, to, flag) => {
+    const cap = B.b[to];
+    const p = B.b[from];
+    if (typeOf(p) === PAWN && (rankOf(to) === 7 || rankOf(to) === 0)) {
+      for (const pr of [QUEEN, ROOK, BISHOP, KNIGHT]) list.push(mkMove(from, to, cap, pr, flag));
+    } else list.push(mkMove(from, to, cap, 0, flag));
+  };
+  for (let from = 0; from < 128; from++) {
+    if (!onBoard(from)) continue;
+    const p = B.b[from];
+    if (!p || colorOf(p) !== us) continue;
+    const t = typeOf(p);
+    if (t === PAWN) {
+      const dir = us ? -16 : 16, startRank = us ? 6 : 1;
+      const one = from + dir;
+      if (!capturesOnly && onBoard(one) && !B.b[one]) {
+        push(from, one, F_NORMAL);
+        const two = from + dir * 2;
+        if (rankOf(from) === startRank && !B.b[two]) list.push(mkMove(from, two, 0, 0, F_DOUBLE));
+      }
+      for (const d of [-1, 1]) {
+        const to = one + d;
+        if (!onBoard(to)) continue;
+        const cap = B.b[to];
+        if (cap && colorOf(cap) === them) push(from, to, F_NORMAL);
+        else if (to === B.ep) list.push(mkMove(from, to, PAWN | (them << 3), 0, F_EP));
+      }
+    } else if (t === KNIGHT || t === KING) {
+      for (const o of (t === KNIGHT ? N_OFF : K_OFF)) {
+        const to = from + o;
+        if (!onBoard(to)) continue;
+        const cap = B.b[to];
+        if (cap && colorOf(cap) === us) continue;
+        if (capturesOnly && !cap) continue;
+        push(from, to, F_NORMAL);
+      }
+    } else {
+      const offs = t === BISHOP ? B_OFF : t === ROOK ? R_OFF : K_OFF;
+      for (const o of offs) {
+        for (let to = from + o; onBoard(to); to += o) {
+          const cap = B.b[to];
+          if (cap && colorOf(cap) === us) break;
+          if (!capturesOnly || cap) push(from, to, F_NORMAL);
+          if (cap) break;
+        }
+      }
+    }
+  }
+  // рокировки
+  if (!capturesOnly) {
+    const k = B.kings[us];
+    if (us === 0 && k === 4) {
+      if ((B.castling & 1) && !B.b[5] && !B.b[6] &&
+          !attacked(4, 1) && !attacked(5, 1) && !attacked(6, 1))
+        list.push(mkMove(4, 6, 0, 0, F_CASTLE_K));
+      if ((B.castling & 2) && !B.b[3] && !B.b[2] && !B.b[1] &&
+          !attacked(4, 1) && !attacked(3, 1) && !attacked(2, 1))
+        list.push(mkMove(4, 2, 0, 0, F_CASTLE_Q));
+    } else if (us === 1 && k === 116) {
+      if ((B.castling & 4) && !B.b[117] && !B.b[118] &&
+          !attacked(116, 0) && !attacked(117, 0) && !attacked(118, 0))
+        list.push(mkMove(116, 118, 0, 0, F_CASTLE_K));
+      if ((B.castling & 8) && !B.b[115] && !B.b[114] && !B.b[113] &&
+          !attacked(116, 0) && !attacked(115, 0) && !attacked(114, 0))
+        list.push(mkMove(116, 114, 0, 0, F_CASTLE_Q));
+    }
+  }
+  return list;
+}
+
+const CASTLE_MASK = new Int8Array(128).fill(15);
+CASTLE_MASK[0] = 15 & ~2; CASTLE_MASK[4] = 15 & ~3; CASTLE_MASK[7] = 15 & ~1;
+CASTLE_MASK[112] = 15 & ~8; CASTLE_MASK[116] = 15 & ~12; CASTLE_MASK[119] = 15 & ~4;
+
+function makeMove(m) {
+  const from = mFrom(m), to = mTo(m), flag = mFlag(m), promo = mPromo(m);
+  const p = B.b[from], us = B.side, them = us ^ 1;
+  B.undo.push({ m, castling: B.castling, ep: B.ep, half: B.half, h1: B.h1, h2: B.h2 });
+
+  if (B.ep >= 0) xorEp(fileOf(B.ep));
+  xorCastle(B.castling);
+
+  let captured = B.b[to];
+  if (flag === F_EP) {
+    const capSq = to - (us ? -16 : 16);
+    xorPiece(B.b[capSq], capSq);
+    B.b[capSq] = 0;
+    captured = PAWN | (them << 3);
+  } else if (captured) xorPiece(captured, to);
+
+  xorPiece(p, from);
+  B.b[from] = 0;
+  const placed = promo ? (promo | (us << 3)) : p;
+  B.b[to] = placed;
+  xorPiece(placed, to);
+
+  if (typeOf(p) === KING) {
+    B.kings[us] = to;
+    if (flag === F_CASTLE_K) {
+      const rf = from + 3, rt = from + 1;
+      xorPiece(B.b[rf], rf); B.b[rt] = B.b[rf]; B.b[rf] = 0; xorPiece(B.b[rt], rt);
+    } else if (flag === F_CASTLE_Q) {
+      const rf = from - 4, rt = from - 1;
+      xorPiece(B.b[rf], rf); B.b[rt] = B.b[rf]; B.b[rf] = 0; xorPiece(B.b[rt], rt);
+    }
+  }
+  B.castling &= CASTLE_MASK[from] & CASTLE_MASK[to];
+  xorCastle(B.castling);
+
+  B.ep = (flag === F_DOUBLE) ? (from + (us ? -16 : 16)) : -1;
+  if (B.ep >= 0) xorEp(fileOf(B.ep));
+
+  B.half = (typeOf(p) === PAWN || captured) ? 0 : B.half + 1;
+  if (us === 1) B.full++;
+  B.side = them; xorSide();
+  return true;
+}
+function unmakeMove() {
+  const u = B.undo.pop();
+  const m = u.m, from = mFrom(m), to = mTo(m), flag = mFlag(m), promo = mPromo(m);
+  B.side ^= 1;
+  const us = B.side, them = us ^ 1;
+  const moved = promo ? (PAWN | (us << 3)) : B.b[to];
+  B.b[from] = moved;
+  B.b[to] = 0;
+  if (typeOf(moved) === KING) {
+    B.kings[us] = from;
+    if (flag === F_CASTLE_K) { const rf = from + 3, rt = from + 1; B.b[rf] = B.b[rt]; B.b[rt] = 0; }
+    else if (flag === F_CASTLE_Q) { const rf = from - 4, rt = from - 1; B.b[rf] = B.b[rt]; B.b[rt] = 0; }
+  }
+  const cap = mCap(m);
+  if (flag === F_EP) B.b[to - (us ? -16 : 16)] = PAWN | (them << 3);
+  else if (cap) B.b[to] = cap;
+  B.castling = u.castling; B.ep = u.ep; B.half = u.half;
+  B.h1 = u.h1; B.h2 = u.h2;
+  if (us === 1) B.full--;
+}
+// легальные ходы (с проверкой шаха)
+function legalMoves() {
+  const out = [];
+  for (const m of genMoves(false)) {
+    makeMove(m);
+    if (!inCheck(B.side ^ 1)) out.push(m);
+    unmakeMove();
+  }
+  return out;
+}
+
+// ================== ОЦЕНКА ПОЗИЦИИ ==================
+const VAL = [0, 100, 320, 330, 500, 900, 0];
+// таблицы «где фигуре хорошо стоять», читаются как доска глазами белых (a8 слева сверху)
+const PST = {
+  1: [ 0,  0,  0,  0,  0,  0,  0,  0,   50, 50, 50, 50, 50, 50, 50, 50,
+      10, 10, 20, 30, 30, 20, 10, 10,    5,  5, 10, 25, 25, 10,  5,  5,
+       0,  0,  0, 20, 20,  0,  0,  0,    5, -5,-10,  0,  0,-10, -5,  5,
+       5, 10, 10,-20,-20, 10, 10,  5,    0,  0,  0,  0,  0,  0,  0,  0],
+  2: [-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,  0,  0,  0,  0,-20,-40,
+      -30,  0, 10, 15, 15, 10,  0,-30, -30,  5, 15, 20, 20, 15,  5,-30,
+      -30,  0, 15, 20, 20, 15,  0,-30, -30,  5, 10, 15, 15, 10,  5,-30,
+      -40,-20,  0,  5,  5,  0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+  3: [-20,-10,-10,-10,-10,-10,-10,-20, -10,  0,  0,  0,  0,  0,  0,-10,
+      -10,  0,  5, 10, 10,  5,  0,-10, -10,  5,  5, 10, 10,  5,  5,-10,
+      -10,  0, 10, 10, 10, 10,  0,-10, -10, 10, 10, 10, 10, 10, 10,-10,
+      -10,  5,  0,  0,  0,  0,  5,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+  4: [  0,  0,  0,  0,  0,  0,  0,  0,    5, 10, 10, 10, 10, 10, 10,  5,
+       -5,  0,  0,  0,  0,  0,  0, -5,   -5,  0,  0,  0,  0,  0,  0, -5,
+       -5,  0,  0,  0,  0,  0,  0, -5,   -5,  0,  0,  0,  0,  0,  0, -5,
+       -5,  0,  0,  0,  0,  0,  0, -5,    0,  0,  0,  5,  5,  0,  0,  0],
+  5: [-20,-10,-10, -5, -5,-10,-10,-20, -10,  0,  0,  0,  0,  0,  0,-10,
+      -10,  0,  5,  5,  5,  5,  0,-10,  -5,  0,  5,  5,  5,  5,  0, -5,
+        0,  0,  5,  5,  5,  5,  0, -5, -10,  5,  5,  5,  5,  5,  0,-10,
+      -10,  0,  5,  0,  0,  0,  0,-10, -20,-10,-10, -5, -5,-10,-10,-20],
+  6: [-30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30,
+      -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30,
+      -20,-30,-30,-40,-40,-30,-30,-20, -10,-20,-20,-20,-20,-20,-20,-10,
+       20, 20,  0,  0,  0,  0, 20, 20,  20, 30, 10,  0,  0, 10, 30, 20]
+};
+const KING_END = [-50,-40,-30,-20,-20,-30,-40,-50, -30,-20,-10,  0,  0,-10,-20,-30,
+                  -30,-10, 20, 30, 30, 20,-10,-30, -30,-10, 30, 40, 40, 30,-10,-30,
+                  -30,-10, 30, 40, 40, 30,-10,-30, -30,-10, 20, 30, 30, 20,-10,-30,
+                  -30,-30,  0,  0,  0,  0,-30,-30, -50,-30,-30,-30,-30,-30,-30,-50];
+const pstIndex = (sq, color) => color === 0 ? (7 - rankOf(sq)) * 8 + fileOf(sq)
+                                           : rankOf(sq) * 8 + fileOf(sq);
+function evaluate() {
+  let mg = 0, eg = 0, phase = 0;
+  const pawnFiles = [[0,0,0,0,0,0,0,0], [0,0,0,0,0,0,0,0]];
+  const pawnSqs = [[], []];
+  for (let sq = 0; sq < 128; sq++) {
+    if (!onBoard(sq)) continue;
+    const p = B.b[sq];
+    if (!p) continue;
+    const t = typeOf(p), c = colorOf(p), sign = c === 0 ? 1 : -1;
+    const idx = pstIndex(sq, c);
+    if (t === PAWN) { pawnFiles[c][fileOf(sq)]++; pawnSqs[c].push(sq); }
+    else if (t !== KING) phase += t === QUEEN ? 4 : (t === ROOK ? 2 : 1);
+    const base = VAL[t] + (t === KING ? 0 : PST[t][idx]);
+    mg += sign * (base + (t === KING ? PST[6][idx] : 0));
+    eg += sign * (base + (t === KING ? KING_END[idx] : 0));
+  }
+  // слоны парой, структура пешек, ладьи на открытых линиях
+  for (const c of [0, 1]) {
+    const sign = c === 0 ? 1 : -1;
+    let bishops = 0, rooks = [];
+    for (let sq = 0; sq < 128; sq++) {
+      if (!onBoard(sq) || !B.b[sq] || colorOf(B.b[sq]) !== c) continue;
+      const t = typeOf(B.b[sq]);
+      if (t === BISHOP) bishops++;
+      if (t === ROOK) rooks.push(sq);
+    }
+    if (bishops >= 2) { mg += sign * 30; eg += sign * 40; }
+    for (let f = 0; f < 8; f++) {
+      const n = pawnFiles[c][f];
+      if (n > 1) { mg -= sign * 12 * (n - 1); eg -= sign * 18 * (n - 1); }
+      if (n && !(f > 0 && pawnFiles[c][f - 1]) && !(f < 7 && pawnFiles[c][f + 1]))
+        { mg -= sign * 14; eg -= sign * 18; }
+    }
+    for (const sq of rooks) {
+      const f = fileOf(sq);
+      if (!pawnFiles[c][f]) { mg += sign * (pawnFiles[c ^ 1][f] ? 12 : 25); eg += sign * 10; }
+    }
+    for (const sq of pawnSqs[c]) {                      // проходные пешки
+      const f = fileOf(sq), r = c === 0 ? rankOf(sq) : 7 - rankOf(sq);
+      let passed = true;
+      for (const sq2 of pawnSqs[c ^ 1]) {
+        const f2 = fileOf(sq2), r2 = c === 0 ? rankOf(sq2) : 7 - rankOf(sq2);
+        if (Math.abs(f2 - f) <= 1 && r2 > r) { passed = false; break; }
+      }
+      if (passed) { mg += sign * (10 + r * 6); eg += sign * (20 + r * 14); }
+    }
+  }
+  const ph = Math.min(24, phase) / 24;
+  const score = mg * ph + eg * (1 - ph);
+  return B.side === 0 ? score : -score;
+}
+function insufficientMaterial() {
+  const pieces = [];
+  for (let sq = 0; sq < 128; sq++) {
+    if (!onBoard(sq) || !B.b[sq]) continue;
+    const t = typeOf(B.b[sq]);
+    if (t !== KING) pieces.push({ t, c: colorOf(B.b[sq]), dark: (fileOf(sq) + rankOf(sq)) % 2 });
+  }
+  if (!pieces.length) return true;
+  if (pieces.length === 1 && (pieces[0].t === BISHOP || pieces[0].t === KNIGHT)) return true;
+  if (pieces.length === 2 && pieces[0].t === BISHOP && pieces[1].t === BISHOP &&
+      pieces[0].c !== pieces[1].c && pieces[0].dark === pieces[1].dark) return true;
+  return false;
+}
+
+// ================== ПОИСК ==================
+const MATE = 30000, INF = 1e6;
+let nodes = 0, stopAt = 0, timedOut = false;
+let TT = new Map();
+const killers = [], histTable = new Int32Array(128 * 128);
+let gameKeys = [];                                       // позиции, уже случившиеся в партии
+const pathKeys = [];
+function isRepetition() {
+  const k = posKey();
+  let n = 0;
+  for (let i = pathKeys.length - 1; i >= 0; i--) if (pathKeys[i] === k) n++;
+  for (const g of gameKeys) if (g === k) n++;
+  return n >= 2;
+}
+function scoreMove(m, ttMove, ply) {
+  if (m === ttMove) return 1e7;
+  const cap = mCap(m);
+  if (cap) return 1e6 + VAL[typeOf(cap)] * 10 - VAL[typeOf(B.b[mFrom(m)])];
+  if (mPromo(m)) return 9e5 + VAL[mPromo(m)];
+  if (killers[ply] && killers[ply][0] === m) return 8e5;
+  if (killers[ply] && killers[ply][1] === m) return 7e5;
+  return histTable[mFrom(m) * 128 + mTo(m)];
+}
+function quiesce(alpha, beta, ply) {
+  nodes++;
+  if ((nodes & 1023) === 0 && Date.now() > stopAt) timedOut = true;
+  if (timedOut) return 0;
+  let stand = evaluate();
+  if (stand >= beta) return stand;
+  if (stand > alpha) alpha = stand;
+  const moves = genMoves(true).sort((a, b) => scoreMove(b, 0, ply) - scoreMove(a, 0, ply));
+  for (const m of moves) {
+    if (VAL[typeOf(mCap(m))] + 200 + stand < alpha && !mPromo(m)) continue;   // отсечение по дельте
+    makeMove(m);
+    if (inCheck(B.side ^ 1)) { unmakeMove(); continue; }
+    pathKeys.push(posKey());
+    const s = -quiesce(-beta, -alpha, ply + 1);
+    pathKeys.pop(); unmakeMove();
+    if (timedOut) return 0;
+    if (s >= beta) return s;
+    if (s > alpha) alpha = s;
+  }
+  return alpha;
+}
+function alphaBeta(depth, alpha, beta, ply) {
+  nodes++;
+  if ((nodes & 1023) === 0 && Date.now() > stopAt) timedOut = true;
+  if (timedOut) return 0;
+  if (ply > 0 && (isRepetition() || B.half >= 100 || insufficientMaterial())) return 0;
+
+  const key = posKey();
+  const tt = TT.get(key);
+  let ttMove = 0;
+  if (tt) {
+    ttMove = tt.m;
+    if (tt.d >= depth && ply > 0) {
+      if (tt.f === 0) return tt.s;
+      if (tt.f === 1 && tt.s <= alpha) return tt.s;
+      if (tt.f === 2 && tt.s >= beta) return tt.s;
+    }
+  }
+  const checked = inCheck(B.side);
+  if (checked) depth++;                                   // продлеваем шахи
+  if (depth <= 0) return quiesce(alpha, beta, ply);
+
+  const moves = genMoves(false).sort((a, b) => scoreMove(b, ttMove, ply) - scoreMove(a, ttMove, ply));
+  let best = -INF, bestMove = 0, legal = 0, alpha0 = alpha;
+  for (const m of moves) {
+    makeMove(m);
+    if (inCheck(B.side ^ 1)) { unmakeMove(); continue; }
+    legal++;
+    pathKeys.push(posKey());
+    let s;
+    if (legal === 1) s = -alphaBeta(depth - 1, -beta, -alpha, ply + 1);
+    else {
+      s = -alphaBeta(depth - 1, -alpha - 1, -alpha, ply + 1);         // нулевое окно
+      if (s > alpha && s < beta) s = -alphaBeta(depth - 1, -beta, -alpha, ply + 1);
+    }
+    pathKeys.pop(); unmakeMove();
+    if (timedOut) return 0;
+    if (s > best) { best = s; bestMove = m; }
+    if (s > alpha) alpha = s;
+    if (alpha >= beta) {
+      if (!mCap(m)) {
+        killers[ply] = killers[ply] || [0, 0];
+        if (killers[ply][0] !== m) { killers[ply][1] = killers[ply][0]; killers[ply][0] = m; }
+        histTable[mFrom(m) * 128 + mTo(m)] += depth * depth;
+      }
+      break;
+    }
+  }
+  if (!legal) return checked ? -MATE + ply : 0;           // мат или пат
+  if (TT.size < 300000)
+    TT.set(key, { d: depth, s: best, m: bestMove, f: best <= alpha0 ? 1 : (best >= beta ? 2 : 0) });
+  return best;
+}
+// поиск с итеративным углублением; возвращает оценки всех ходов из корня
+// honest = считать каждый ход из корня полным окном (нужно уровням с «шумом»,
+// иначе отсечённые ходы получают одинаковую границу и выбор становится случайным)
+function search(maxDepth, maxMs, honest) {
+  nodes = 0; timedOut = false; stopAt = Date.now() + maxMs;
+  TT.clear(); killers.length = 0; histTable.fill(0); pathKeys.length = 0;
+  const root = legalMoves();
+  if (!root.length) return { move: 0, score: 0, depth: 0, nodes: 0, scores: [] };
+  let scores = root.map(m => ({ m, s: -INF }));
+  let bestMove = root[0], bestScore = 0, reached = 0;
+  for (let d = 1; d <= maxDepth; d++) {
+    const cur = [];
+    let alpha = -INF;
+    const ordered = scores.slice().sort((a, b) => b.s - a.s).map(o => o.m);
+    for (const m of ordered) {
+      makeMove(m);
+      pathKeys.push(posKey());
+      const s = -alphaBeta(d - 1, -INF, honest ? INF : -alpha, 1);
+      pathKeys.pop(); unmakeMove();
+      if (timedOut) break;
+      cur.push({ m, s });
+      if (s > alpha) alpha = s;
+    }
+    if (timedOut || !cur.length) break;
+    scores = cur;
+    cur.sort((a, b) => b.s - a.s);
+    bestMove = cur[0].m; bestScore = cur[0].s; reached = d;
+    if (Math.abs(bestScore) > MATE - 100) break;          // мат найден
+  }
+  scores.sort((a, b) => b.s - a.s);
+  return { move: bestMove, score: bestScore, depth: reached, nodes, scores };
+}
+
+// ================== УРОВНИ БОТОВ ==================
+const LEVELS = [
+  { name: 'Ботёнок',   elo: 250,  depth: 1, ms: 60,   blunder: .70, noise: 80 },
+  { name: 'Новичок',   elo: 500,  depth: 1, ms: 100,  blunder: .45, noise: 60 },
+  { name: 'Любитель',  elo: 800,  depth: 2, ms: 200,  blunder: .28, noise: 45 },
+  { name: 'Ученик',    elo: 1100, depth: 3, ms: 300,  blunder: .15, noise: 30 },
+  { name: 'Клубный',   elo: 1400, depth: 4, ms: 450,  blunder: .07, noise: 20 },
+  { name: 'Уверенный', elo: 1700, depth: 5, ms: 700,  blunder: .03, noise: 12 },
+  { name: 'Эксперт',   elo: 2000, depth: 6, ms: 1000, blunder: .01, noise: 6 },
+  { name: 'Мастер',    elo: 2300, depth: 8, ms: 1600, blunder: 0,   noise: 0 }
+];
+function chooseMove(level) {
+  const L = LEVELS[clampLevel(level)];
+  const legal = legalMoves();
+  if (!legal.length) return { move: 0, info: null };
+  if (Math.random() < L.blunder) {                        // слабые уровни иногда «зевают»
+    const quiet = legal.filter(m => !mCap(m));
+    const pool = quiet.length && Math.random() < .7 ? quiet : legal;
+    return { move: pool[(Math.random() * pool.length) | 0], info: { random: true } };
+  }
+  const res = search(L.depth, L.ms, L.noise > 0);
+  if (!res.scores.length) return { move: legal[0], info: null };
+  const noisy = res.scores.map(o => ({ m: o.m, s: o.s + (L.noise ? (Math.random() * 2 - 1) * L.noise : 0) }));
+  noisy.sort((a, b) => b.s - a.s);
+  return { move: noisy[0].m, info: { depth: res.depth, nodes: res.nodes, score: res.score } };
+}
+function clampLevel(l) { return l < 0 ? 0 : (l >= LEVELS.length ? LEVELS.length - 1 : l); }
+
+// ================== СОСТОЯНИЕ ПАРТИИ ==================
+function gameResult() {
+  const legal = legalMoves();
+  if (!legal.length) return inCheck(B.side) ? (B.side === 0 ? 'black_mate' : 'white_mate') : 'stalemate';
+  if (B.half >= 100) return 'fifty';
+  if (insufficientMaterial()) return 'material';
+  const k = posKey();
+  let n = 0;
+  for (const g of gameKeys) if (g === k) n++;
+  if (n >= 3) return 'repetition';
+  return null;
+}
+
+// ================== ФИГУРЫ (SVG) ==================
+const SHAPES = {
+  1: '<circle cx="22.5" cy="13" r="6"/>' +
+     '<path d="M18.3 18.6c-2.4 1.7-3.5 4-2.8 6.4.5 1.9 1.9 3.3 2.8 5 .6 1.2.8 2.4.7 3.5h7c-.1-1.1.1-2.3.7-3.5.9-1.7 2.3-3.1 2.8-5 .7-2.4-.4-4.7-2.8-6.4z"/>' +
+     '<rect x="16.2" y="31.5" width="12.6" height="4" rx="1.6"/>' +
+     '<path d="M12.5 36h20c1.5 0 2.7 1.2 2.7 2.7V41H9.8v-2.3c0-1.5 1.2-2.7 2.7-2.7z"/>',
+  2: '<path d="M12.5,39.5 c0,-6.4 1.4,-10.6 4.6,-14 c1.6,-1.7 2.6,-2.8 3,-3.9 ' +
+       'c-1.8,1 -4,2.2 -6.2,2.2 c-2.4,0 -3.8,-1.4 -3.4,-3.4 c0.5,-2.4 2.4,-4.6 4.8,-6.4 ' +
+       'c2.4,-1.8 5,-3 7,-3.6 l0.6,-3.4 l2.4,2.6 c6.4,0 11,4.2 12,10.6 ' +
+       'c0.6,3.8 0.6,8.2 0.6,11.4 c0,3.2 0.2,5.4 0.8,7.9 z"/>' +
+       '<circle cx="18.6" cy="15.6" r="1.3" class="det"/>' +
+       '<path d="M25.5,11.5 c2.6,1.2 4.4,3.4 5.2,6.4" class="mane"/>' +
+       '<rect x="9" y="38.5" width="27" height="4.6" rx="1.9"/>',
+  3: '<circle cx="22.5" cy="7.8" r="2.9"/>' +
+     '<path d="M22.5 10.4c-4.9 2.9-8.2 7.8-8.2 12.5 0 3.2 1.7 5.5 3.3 7.1h9.8c1.6-1.6 3.3-3.9 3.3-7.1 0-4.7-3.3-9.6-8.2-12.5z"/>' +
+     '<path d="M22.5 15v7.6M19 19h7" class="slit"/>' +
+     '<rect x="15.4" y="30" width="14.2" height="4" rx="1.6"/>' +
+     '<path d="M11 35h23c1.6 0 2.9 1.3 2.9 2.9V41H8.1v-3.1C8.1 36.3 9.4 35 11 35z"/>',
+  4: '<path d="M11 8h4.4v3h4.4V8h5.4v3h4.4V8H34v6.2l-3 3v10.6l3 3V34H11v-3.2l3-3V17.2l-3-3z"/>' +
+     '<rect x="8.2" y="35" width="28.6" height="6" rx="2.2"/>',
+  5: '<circle cx="8" cy="13.5" r="2.7"/><circle cx="15.5" cy="9.6" r="2.7"/><circle cx="22.5" cy="8" r="2.9"/>' +
+     '<circle cx="29.5" cy="9.6" r="2.7"/><circle cx="37" cy="13.5" r="2.7"/>' +
+     '<path d="M11 29L8 14.5l5.5 6.8 2-10.4 5 9.6 2-11.2 2 11.2 5-9.6 2 10.4 5.5-6.8L34 29z"/>' +
+     '<rect x="11.4" y="28.6" width="22.2" height="4.2" rx="1.6"/>' +
+     '<path d="M9.5 33.6h26c1.6 0 2.9 1.3 2.9 2.9V41H6.6v-4.5c0-1.6 1.3-2.9 2.9-2.9z"/>',
+  6: '<path d="M22.5 5v9.4M18.3 8.6h8.4" class="slit" stroke-width="3.2"/>' +
+     '<path d="M22.5 14.6c-5.7 0-10.2 3.7-10.2 8.2 0 3.1 1.9 5.6 3.7 7.6h13c1.8-2 3.7-4.5 3.7-7.6 0-4.5-4.5-8.2-10.2-8.2z"/>' +
+     '<rect x="14" y="30" width="17" height="4.4" rx="1.6"/>' +
+     '<path d="M9.5 34.8h26c1.6 0 2.9 1.3 2.9 2.9V41H6.6v-3.3c0-1.6 1.3-2.9 2.9-2.9z"/>'
+};
+function pieceSVG(piece, cls) {
+  const t = typeOf(piece), black = colorOf(piece) === 1;
+  const fill = black ? '#3a3835' : '#fafafa';
+  const line = black ? '#141312' : '#3c3a37';
+  return '<svg viewBox="0 0 45 45" class="' + (cls || '') + '">' +
+    '<g fill="' + fill + '" stroke="' + line + '" stroke-width="1.7" stroke-linejoin="round">' +
+    SHAPES[t].replace(/class="det"/g, 'fill="' + line + '" stroke="none"')
+             .replace(/class="slit"/g, 'fill="none" stroke="' + line + '" stroke-width="2.2" stroke-linecap="round"')
+             .replace(/class="mane"/g, 'fill="none" stroke="' + line + '" stroke-width="1.5" stroke-linecap="round"') +
+    '</g></svg>';
+}
+
+// ================== ЗВУК ==================
+const AC = window.AudioContext || window.webkitAudioContext;
+let actx = null;
+function audioOn() { if (!actx && AC) actx = new AC(); if (actx && actx.state === 'suspended') actx.resume(); }
+function click(freq, dur, gain, type) {
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type || 'triangle'; o.frequency.value = freq;
+  g.gain.setValueAtTime(gain, actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.0001, actx.currentTime + dur);
+  o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + dur);
+}
+function thud(dur, freq, gain) {
+  if (!actx) return;
+  const n = Math.max(1, (actx.sampleRate * dur) | 0);
+  const buf = actx.createBuffer(1, n, actx.sampleRate), ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 4);
+  const src = actx.createBufferSource(); src.buffer = buf;
+  const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq;
+  const g = actx.createGain(); g.gain.value = gain;
+  src.connect(f); f.connect(g); g.connect(actx.destination); src.start();
+}
+const SFX = {
+  move()    { thud(.06, 900, .5); click(220, .05, .06); },
+  capture() { thud(.09, 500, .7); click(150, .07, .08, 'sawtooth'); },
+  castle()  { thud(.07, 800, .5); setTimeout(() => thud(.06, 700, .45), 70); },
+  check()   { click(880, .09, .1); setTimeout(() => click(1240, .1, .09), 90); },
+  promote() { [660, 880, 1180].forEach((f, i) => setTimeout(() => click(f, .12, .09), i * 80)); },
+  win()     { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => click(f, .18, .1), i * 110)); },
+  lose()    { [523, 440, 349].forEach((f, i) => setTimeout(() => click(f, .22, .1), i * 140)); },
+  draw()    { [523, 466].forEach((f, i) => setTimeout(() => click(f, .2, .08), i * 150)); }
+};
+
+// ================== СОСТОЯНИЕ ИНТЕРФЕЙСА ==================
+const $ = id => document.getElementById(id);
+const UI = {
+  human: 0, level: 3, flipped: false, timeMin: 0,
+  clock: [600, 600], ticking: false, lastTick: 0,
+  hist: [], thinking: false, over: false, sel: -1, targets: [], last: null,
+  pendingPromo: null, hint: null
+};
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const AVATARS = ['🐣', '🙂', '🤓', '🎓', '♟️', '🧠', '🦾', '👑'];
+
+// ================== ОТРИСОВКА ДОСКИ ==================
+function sqPos(sq) {
+  let f = fileOf(sq), r = rankOf(sq);
+  if (UI.flipped) { f = 7 - f; r = 7 - r; }
+  return { f, r: 7 - r };
+}
+function buildSquares() {
+  const host = $('squares');
+  host.innerHTML = '';
+  for (let sq = 0; sq < 128; sq++) {
+    if (!onBoard(sq)) continue;
+    const { f, r } = sqPos(sq);
+    const light = (fileOf(sq) + rankOf(sq)) % 2 === 1;
+    const d = document.createElement('div');
+    d.className = 'sq ' + (light ? 'l' : 'd');
+    d.style.left = f * 12.5 + '%'; d.style.top = r * 12.5 + '%';
+    d.dataset.sq = sq;
+    if (r === 7) d.innerHTML += '<span class="coord f ' + (light ? 'onl' : 'ond') + '">' +
+      'abcdefgh'[fileOf(sq)] + '</span>';
+    if (f === 0) d.innerHTML += '<span class="coord r ' + (light ? 'onl' : 'ond') + '">' +
+      (rankOf(sq) + 1) + '</span>';
+    host.appendChild(d);
+  }
+}
+function pieceTransform(sq) {
+  const { f, r } = sqPos(sq);
+  return 'translate(' + f * 100 + '%,' + r * 100 + '%)';
+}
+function syncPieces() {
+  const host = $('pieces');
+  host.innerHTML = '';
+  for (let sq = 0; sq < 128; sq++) {
+    if (!onBoard(sq) || !B.b[sq]) continue;
+    const el = document.createElement('div');
+    el.className = 'piece';
+    el.dataset.sq = sq;
+    el.style.transform = pieceTransform(sq);
+    el.innerHTML = pieceSVG(B.b[sq]);
+    host.appendChild(el);
+  }
+}
+function drawMarks() {
+  const host = $('marks');
+  host.innerHTML = '';
+  const add = (sq, cls) => {
+    const { f, r } = sqPos(sq);
+    const d = document.createElement('div');
+    d.className = 'mark ' + cls;
+    d.style.left = f * 12.5 + '%'; d.style.top = r * 12.5 + '%';
+    host.appendChild(d);
+  };
+  if (UI.last) { add(UI.last.from, 'last'); add(UI.last.to, 'last'); }
+  if (UI.hint) { add(UI.hint.from, 'last'); add(UI.hint.to, 'last'); }
+  if (UI.sel >= 0) add(UI.sel, 'sel');
+  if (!UI.over && inCheck(B.side)) add(B.kings[B.side], 'check');
+}
+function drawHints() {
+  const host = $('hints');
+  host.innerHTML = '';
+  for (const m of UI.targets) {
+    const to = mTo(m), { f, r } = sqPos(to);
+    const d = document.createElement('div');
+    d.className = 'hint' + ((mCap(m) || mFlag(m) === F_EP) ? ' cap' : '');
+    d.style.left = f * 12.5 + '%'; d.style.top = r * 12.5 + '%';
+    d.innerHTML = '<i></i>';
+    host.appendChild(d);
+  }
+}
+function redraw() { syncPieces(); drawMarks(); drawHints(); updatePanel(); }
+
+// ================== НОТАЦИЯ ==================
+const SAN_LETTER = ['', '', 'N', 'B', 'R', 'Q', 'K'];
+function moveSAN(m) {
+  const from = mFrom(m), to = mTo(m), p = B.b[from], t = typeOf(p), flag = mFlag(m);
+  let s;
+  if (flag === F_CASTLE_K) s = 'O-O';
+  else if (flag === F_CASTLE_Q) s = 'O-O-O';
+  else {
+    const cap = mCap(m) || flag === F_EP;
+    if (t === PAWN) {
+      s = (cap ? 'abcdefgh'[fileOf(from)] + 'x' : '') + sqName(to);
+      if (mPromo(m)) s += '=' + SAN_LETTER[mPromo(m)];
+    } else {
+      s = SAN_LETTER[t];
+      const rivals = legalMoves().filter(x => x !== m && mTo(x) === to &&
+        typeOf(B.b[mFrom(x)]) === t && mFrom(x) !== from);
+      if (rivals.length) {
+        const sameFile = rivals.some(x => fileOf(mFrom(x)) === fileOf(from));
+        const sameRank = rivals.some(x => rankOf(mFrom(x)) === rankOf(from));
+        s += !sameFile ? 'abcdefgh'[fileOf(from)] : (!sameRank ? (rankOf(from) + 1) : sqName(from));
+      }
+      if (cap) s += 'x';
+      s += sqName(to);
+    }
+  }
+  makeMove(m);
+  const reply = legalMoves();
+  if (inCheck(B.side)) s += reply.length ? '+' : '#';
+  unmakeMove();
+  return s;
+}
+function sanHTML(san, piece) {
+  if (!piece || typeOf(piece) === PAWN || san[0] === 'O')
+    return '<span>' + san + '</span>';
+  return pieceSVG(piece, 'ico').replace('<svg ', '<svg style="width:15px;height:15px;vertical-align:-3px;margin-right:1px" ') +
+         '<span>' + san.slice(1) + '</span>';
+}
+
+// ================== ПАНЕЛЬ ==================
+function updatePanel() {
+  // список ходов
+  const host = $('moves');
+  let html = '';
+  for (let i = 0; i < UI.hist.length; i += 2) {
+    const w = UI.hist[i], b = UI.hist[i + 1];
+    html += '<div class="mrow"><div class="mno">' + (i / 2 + 1) + '.</div>' +
+      '<div class="mv' + (i === UI.hist.length - 1 ? ' cur' : '') + '">' + sanHTML(w.san, w.piece) + '</div>' +
+      '<div class="mv' + (i + 1 === UI.hist.length - 1 ? ' cur' : '') + '">' +
+      (b ? sanHTML(b.san, b.piece) : '') + '</div></div>';
+  }
+  host.innerHTML = html || '<div style="padding:14px;color:#8b8a88;font-size:13px">Ходов пока нет</div>';
+  host.scrollTop = host.scrollHeight;
+
+  // съеденные фигуры и перевес
+  const start = { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1 };
+  const left = [{ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }];
+  for (let sq = 0; sq < 128; sq++) {
+    if (!onBoard(sq) || !B.b[sq]) continue;
+    const t = typeOf(B.b[sq]); if (t === KING) continue;
+    left[colorOf(B.b[sq])][t]++;
+  }
+  const score = [0, 0], boxes = ['', ''];
+  for (const c of [0, 1]) for (const t of [1, 2, 3, 4, 5]) {
+    const n = start[t] - left[c][t];
+    for (let i = 0; i < n; i++) boxes[c ^ 1] += pieceSVG(t | (c << 3));
+    score[c ^ 1] += n * VAL[t];
+  }
+  const diff = score[0] - score[1];
+  const mine = UI.human, theirs = mine ^ 1;
+  $('botTaken').innerHTML = boxes[mine] + (diff !== 0 && ((mine === 0) === (diff > 0)) ? '<b>+' + Math.abs(diff) / 100 + '</b>' : '');
+  $('topTaken').innerHTML = boxes[theirs] + (diff !== 0 && ((theirs === 0) === (diff > 0)) ? '<b>+' + Math.abs(diff) / 100 + '</b>' : '');
+
+  // часы
+  for (const [el, side] of [[$('botClock'), mine], [$('topClock'), theirs]]) {
+    if (!UI.timeMin) { el.style.display = 'none'; continue; }
+    el.style.display = '';
+    const t = Math.max(0, UI.clock[side]);
+    el.textContent = ((t / 60) | 0) + ':' + ('0' + Math.floor(t % 60)).slice(-2);
+    el.className = 'clock' + (!UI.over && B.side === side ? ' run' : '') + (t < 30 ? ' low' : '');
+  }
+  $('btnBack').disabled = UI.thinking || UI.hist.length < 1;
+  $('btnHint').disabled = UI.thinking || UI.over || B.side !== UI.human;
+}
+function setStatus(text) { $('status').textContent = text; }
+
+// ================== ХОД ==================
+function doMove(m) {
+  const from = mFrom(m), to = mTo(m), piece = B.b[from];
+  const isCap = !!mCap(m) || mFlag(m) === F_EP, flag = mFlag(m);
+  const san = moveSAN(m);
+  UI.sel = -1; UI.targets = []; UI.hint = null;
+
+  const el = document.querySelector('.piece[data-sq="' + from + '"]');
+  const capEl = isCap ? document.querySelector('.piece[data-sq="' + (flag === F_EP ? to - (B.side ? -16 : 16) : to) + '"]') : null;
+  if (capEl) capEl.remove();
+  if (el) { el.style.zIndex = 8; el.dataset.sq = to; el.style.transform = pieceTransform(to); }
+
+  UI.hist.push({ san, piece, from, to, fenBefore: getFEN(), clock: UI.clock.slice() });
+  makeMove(m);
+  gameKeys.push(posKey());
+  UI.last = { from, to };
+
+  if (mPromo(m)) SFX.promote();
+  else if (flag === F_CASTLE_K || flag === F_CASTLE_Q) SFX.castle();
+  else if (isCap) SFX.capture();
+  else SFX.move();
+  const res = gameResult();
+  if (!res && inCheck(B.side)) setTimeout(SFX.check, 90);
+
+  setTimeout(() => {
+    redraw();
+    if (res) return endGame(res);
+    if (B.side !== UI.human) botTurn(); else setStatus('ваш ход');
+  }, 150);
+}
+function botTurn() {
+  UI.thinking = true;
+  setStatus('бот думает…');
+  updatePanel();
+  setTimeout(() => {
+    const t0 = Date.now();
+    const { move } = chooseMove(UI.level);
+    const wait = Math.max(0, 260 - (Date.now() - t0));      // чтобы ход не «телепортировался»
+    setTimeout(() => {
+      UI.thinking = false;
+      if (!move || UI.over) { updatePanel(); return; }
+      doMove(move);
+    }, wait);
+  }, 60);
+}
+function endGame(res) {
+  UI.over = true; UI.ticking = false;
+  const humanWhite = UI.human === 0;
+  let icon = '🤝', title = 'Ничья', sub = '';
+  if (res === 'white_mate' || res === 'black_mate') {
+    const winnerWhite = res === 'white_mate';
+    const youWin = winnerWhite === humanWhite;
+    icon = youWin ? '🏆' : '😔';
+    title = youWin ? 'Вы выиграли' : 'Вы проиграли';
+    sub = 'мат';
+    youWin ? SFX.win() : SFX.lose();
+  } else if (res === 'resign' || res === 'time') {
+    icon = '😔'; title = 'Вы проиграли'; sub = res === 'time' ? 'время вышло' : 'вы сдались';
+    SFX.lose();
+  } else if (res === 'time_bot') {
+    icon = '🏆'; title = 'Вы выиграли'; sub = 'у бота вышло время'; SFX.win();
+  } else {
+    sub = { stalemate: 'пат', fifty: 'правило 50 ходов', material: 'не хватает материала',
+            repetition: 'троекратное повторение' }[res] || 'ничья';
+    SFX.draw();
+  }
+  $('resultIcon').textContent = icon;
+  $('resultText').textContent = title;
+  $('resultSub').textContent = sub + ' · ' + LEVELS[UI.level].name + ' (' + LEVELS[UI.level].elo + ')';
+  $('result').classList.add('show');
+  setStatus(title.toLowerCase());
+  updatePanel();
+}
+
+// ================== ВЗАИМОДЕЙСТВИЕ ==================
+function myTurn() { return !UI.over && !UI.thinking && B.side === UI.human && !UI.pendingPromo; }
+function movesFrom(sq) { return legalMoves().filter(m => mFrom(m) === sq); }
+function selectSquare(sq) {
+  UI.sel = sq; UI.targets = movesFrom(sq); drawMarks(); drawHints();
+}
+function clearSelection() { UI.sel = -1; UI.targets = []; drawMarks(); drawHints(); }
+function tryMove(from, to) {
+  const cand = UI.targets.filter(m => mTo(m) === to);
+  if (!cand.length) return false;
+  if (cand.length > 1 && mPromo(cand[0])) { askPromotion(cand); return true; }
+  doMove(cand[0]);
+  return true;
+}
+function askPromotion(cand) {
+  UI.pendingPromo = cand;
+  const to = mTo(cand[0]), { f, r } = sqPos(to);
+  const box = $('promoBox');
+  box.innerHTML = '';
+  box.style.left = f * 12.5 + '%';
+  box.style.top = (r === 0 ? 0 : 50) + '%';
+  const order = [QUEEN, KNIGHT, ROOK, BISHOP];
+  for (const t of order) {
+    const d = document.createElement('div');
+    d.innerHTML = pieceSVG(t | (UI.human << 3));
+    d.onclick = () => {
+      const m = cand.find(x => mPromo(x) === t);
+      $('promo').style.display = 'none'; UI.pendingPromo = null;
+      if (m) doMove(m);
+    };
+    box.appendChild(d);
+  }
+  $('promo').style.display = 'block';
+  clearSelection();
+}
+(function bindBoard() {
+  const board = $('board');
+  let drag = null;
+  const sqFromPoint = (x, y) => {
+    const r = board.getBoundingClientRect();
+    let f = Math.floor((x - r.left) / (r.width / 8)), rk = Math.floor((y - r.top) / (r.height / 8));
+    if (f < 0 || f > 7 || rk < 0 || rk > 7) return -1;
+    if (UI.flipped) { f = 7 - f; rk = 7 - rk; }
+    return (7 - rk) * 16 + f;
+  };
+  board.addEventListener('pointerdown', e => {
+    audioOn();
+    if (!myTurn()) return;
+    const sq = sqFromPoint(e.clientX, e.clientY);
+    if (sq < 0) return;
+    if (UI.sel >= 0 && tryMove(UI.sel, sq)) return;
+    const p = B.b[sq];
+    if (!p || colorOf(p) !== UI.human) { clearSelection(); return; }
+    selectSquare(sq);
+    const el = document.querySelector('.piece[data-sq="' + sq + '"]');
+    if (!el) return;
+    const r = board.getBoundingClientRect();
+    drag = { el, sq, size: r.width / 8, rect: r };
+    el.classList.add('dragging');
+    el.setPointerCapture(e.pointerId);
+    moveDragged(e.clientX, e.clientY);
+  });
+  function moveDragged(x, y) {
+    if (!drag) return;
+    const dx = x - drag.rect.left - drag.size / 2, dy = y - drag.rect.top - drag.size / 2;
+    drag.el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+  }
+  board.addEventListener('pointermove', e => { if (drag) moveDragged(e.clientX, e.clientY); });
+  board.addEventListener('pointerup', e => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    d.el.classList.remove('dragging');
+    const to = sqFromPoint(e.clientX, e.clientY);
+    d.el.style.transform = pieceTransform(d.sq);
+    if (to >= 0 && to !== d.sq) { if (tryMove(d.sq, to)) return; }
+    if (to === d.sq) selectSquare(d.sq); else clearSelection();
+  });
+  board.addEventListener('pointercancel', () => {
+    if (drag) { drag.el.classList.remove('dragging'); drag.el.style.transform = pieceTransform(drag.sq); drag = null; }
+  });
+})();
+
+// ================== ЧАСЫ ==================
+setInterval(() => {
+  const now = Date.now();
+  const dt = Math.min(2, (now - UI.lastTick) / 1000);
+  UI.lastTick = now;
+  if (!UI.timeMin || UI.over || UI.pendingPromo) return;   // часы идут всю партию
+  UI.clock[B.side] -= dt;
+  if (UI.clock[B.side] <= 0) {
+    UI.clock[B.side] = 0;
+    endGame(B.side === UI.human ? 'time' : 'time_bot');
+  }
+  updatePanel();
+}, 200);
+
+// ================== НОВАЯ ПАРТИЯ ==================
+function startGame(level, sideChoice, timeMin) {
+  UI.level = level;
+  UI.human = sideChoice === 'r' ? (Math.random() < .5 ? 0 : 1) : (sideChoice === 'b' ? 1 : 0);
+  UI.timeMin = timeMin;
+  UI.clock = [timeMin * 60, timeMin * 60];
+  UI.flipped = UI.human === 1;
+  UI.hist = []; UI.over = false; UI.thinking = false; UI.sel = -1; UI.targets = [];
+  UI.last = null; UI.hint = null; UI.pendingPromo = null; UI.lastTick = Date.now();
+  setFEN(START_FEN);
+  gameKeys.length = 0; gameKeys.push(posKey());
+  $('promo').style.display = 'none';
+  $('result').classList.remove('show');
+  const L = LEVELS[level];
+  $('topName').textContent = L.name;
+  $('topAva').textContent = AVATARS[level];
+  $('botName').textContent = 'Вы';
+  $('botAva').textContent = '🙂';
+  $('topName').innerHTML = L.name + ' <span class="prat">(' + L.elo + ')</span>';
+  buildSquares(); redraw();
+  setStatus(B.side === UI.human ? 'ваш ход' : 'бот думает…');
+  if (B.side !== UI.human) botTurn();
+}
+function takeback() {
+  if (UI.thinking || !UI.hist.length) return;
+  const back = (UI.hist.length >= 2 && UI.hist[UI.hist.length - 1] && B.side === UI.human) ? 2 : 1;
+  for (let i = 0; i < back; i++) {
+    const h = UI.hist.pop();
+    if (!h) break;
+    setFEN(h.fenBefore);
+    gameKeys.pop();
+    UI.clock = h.clock.slice();
+  }
+  UI.over = false; UI.last = null; UI.sel = -1; UI.targets = []; UI.hint = null;
+  $('result').classList.remove('show');
+  buildSquares(); redraw();
+  setStatus('ваш ход');
+  if (B.side !== UI.human) botTurn();
+}
+function showHint() {
+  if (!myTurn()) return;
+  setStatus('думаю за вас…');
+  setTimeout(() => {
+    const r = search(4, 500, false);
+    if (r.move) { UI.hint = { from: mFrom(r.move), to: mTo(r.move) }; drawMarks(); }
+    setStatus('подсказка на доске');
+    setTimeout(() => { if (UI.hint) { UI.hint = null; drawMarks(); setStatus('ваш ход'); } }, 2500);
+  }, 30);
+}
+
+// ================== МЕНЮ ==================
+(function setupMenu() {
+  const grid = $('lvlGrid');
+  LEVELS.forEach((L, i) => {
+    const d = document.createElement('div');
+    d.className = 'lvl' + (i === 3 ? ' on' : '');
+    d.innerHTML = '<div class="face">' + AVATARS[i] + '</div><div class="nm">' + L.name +
+                  '</div><div class="el">' + L.elo + '</div>';
+    d.onclick = () => { [...grid.children].forEach(c => c.classList.remove('on')); d.classList.add('on'); UI.level = i; };
+    grid.appendChild(d);
+  });
+  const seg = (id, attr, set) => {
+    const box = $(id);
+    box.onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      [...box.children].forEach(c => c.classList.remove('on'));
+      b.classList.add('on'); set(b.dataset[attr]);
+    };
+  };
+  let side = 'w', time = 0;
+  seg('sideSeg', 'side', v => side = v);
+  seg('timeSeg', 'time', v => time = +v);
+  // запоминаем последние настройки
+  try {
+    const cfg = JSON.parse(localStorage.getItem('chessLite') || 'null');
+    if (cfg) {
+      if (cfg.level >= 0 && cfg.level < LEVELS.length) {
+        UI.level = cfg.level;
+        [...grid.children].forEach((c, i) => c.classList.toggle('on', i === cfg.level));
+      }
+      if (cfg.side) {
+        side = cfg.side;
+        [...$('sideSeg').children].forEach(c => c.classList.toggle('on', c.dataset.side === side));
+      }
+      if (cfg.time !== undefined) {
+        time = cfg.time;
+        [...$('timeSeg').children].forEach(c => c.classList.toggle('on', +c.dataset.time === time));
+      }
+    }
+  } catch (e) {}
+  $('btnStart').onclick = () => {
+    audioOn();
+    try { localStorage.setItem('chessLite', JSON.stringify({ level: UI.level, side, time })); } catch (e) {}
+    $('setup').classList.remove('show');
+    startGame(UI.level, side, time);
+  };
+  $('btnNew').onclick = () => { $('result').classList.remove('show'); $('setup').classList.add('show'); };
+  $('btnNewFromResult').onclick = () => { $('result').classList.remove('show'); $('setup').classList.add('show'); };
+  $('btnRematch').onclick = () => { $('result').classList.remove('show'); startGame(UI.level, UI.human === 0 ? 'w' : 'b', UI.timeMin); };
+  $('btnBack').onclick = takeback;
+  $('btnHint').onclick = showHint;
+  $('btnFlip').onclick = () => { UI.flipped = !UI.flipped; buildSquares(); redraw(); };
+  $('btnResign').onclick = () => { if (!UI.over) endGame('resign'); };
+})();
+setFEN(START_FEN);
+buildSquares(); redraw();
+
+</script>
+</body>
+</html>
