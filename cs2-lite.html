@@ -37,6 +37,16 @@
   #wname { font-size: 12px; opacity: .7; letter-spacing: 1px; text-transform: uppercase; }
   #nades { font-size: 12px; opacity: .8; margin-top: 2px; }
 
+  #team { left: 18px; bottom: 122px; padding: 6px 10px; font-size: 12px; line-height: 1.5; }
+  #team .mate { display: flex; align-items: center; gap: 7px; }
+  #team .nm { min-width: 62px; opacity: .85; }
+  #team .bar { width: 54px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
+  #team .bar i { display: block; height: 100%; background: #7ee08a; }
+  #team .dead { opacity: .35; text-decoration: line-through; }
+  #team .dead .bar i { background: #e8564a; }
+  #spec { position: absolute; left: 50%; top: 44%; transform: translateX(-50%);
+          font-family: "Consolas", monospace; font-size: 15px; letter-spacing: 2px;
+          color: #dfe4ea; text-shadow: 0 2px 10px #000; display: none; }
   #money { left: 18px; bottom: 82px; color: #b7e07e; font-size: 20px; font-weight: 700; }
 
   #top { left: 50%; top: 12px; transform: translateX(-50%); text-align: center; min-width: 240px; }
@@ -129,6 +139,7 @@
       <div><div class="lbl">HP</div><div class="big" id="hpv">100</div></div>
       <div><div class="lbl">БРОНЯ</div><div class="big" id="apv">0</div></div>
     </div>
+    <div class="panel" id="team"></div>
     <div class="panel" id="money">$800</div>
     <div class="panel" id="ammo">
       <div id="wname">Glock-18</div>
@@ -137,18 +148,20 @@
     </div>
     <div id="feed"></div>
     <div id="centermsg"></div>
-    <div id="defuse"><div id="defusebar"><i id="defusefill"></i></div>ОБЕЗВРЕЖИВАНИЕ</div>
+    <div id="defuse"><div id="defusebar"><i id="defusefill"></i></div><span id="defusetxt">ОБЕЗВРЕЖИВАНИЕ</span></div>
+    <div id="spec">ТЫ ПОГИБ · НАБЛЮДЕНИЕ</div>
     <div id="hint">Нажми <b>B</b> — магазин</div>
   </div>
 
   <div class="screen show" id="menu">
     <div class="card">
       <h1>CS<span>2</span> LITE</h1>
-      <h2>ЛЁГКАЯ КОПИЯ COUNTER-STRIKE 2</h2>
-      <p class="lead">Ты играешь за CT. Террористы несут C4 и идут закладывать её на точку A или B:
-        перебей их или обезвредь бомбу. Покупай оружие на заработанные деньги и выиграй 10 раундов.
-        Всё работает прямо в браузере — рейкастинг-движок, боты, экономика, отдача и звук
-        без единой внешней библиотеки.</p>
+      <h2>ЛЁГКАЯ КОПИЯ COUNTER-STRIKE 2 · 3 НА 3</h2>
+      <p class="lead">Матч из шести раундов 3 на 3: три раунда играешь за террористов с двумя
+        напарниками — несёшь C4 и закладываешь её на точке A или B, — потом стороны меняются,
+        и уже ты не даёшь заложить бомбу и снимаешь её. Погиб — смотришь за напарником,
+        раунд продолжается. Всё работает прямо в браузере: рейкастинг-движок, боты, экономика,
+        отдача и звук без единой внешней библиотеки.</p>
       <div class="keys">
         <div><b>W A S D</b> движение</div>
         <div><b>Мышь</b> обзор</div>
@@ -157,7 +170,7 @@
         <div><b>R</b> перезарядка</div>
         <div><b>1 2 3 4</b> оружие</div>
         <div><b>G</b> бросить гранату</div>
-        <div><b>E</b> обезвредить C4</div>
+        <div><b>E</b> заложить / снять C4</div>
         <div><b>B</b> магазин</div>
         <div><b>Shift</b> тихий шаг</div>
         <div><b>Ctrl / C</b> присесть</div>
@@ -217,40 +230,32 @@ const lerp  = (a, b, t) => a + (b - a) * t;
 // '#' кирпич, '=' бетон, 'X' ящик, 'D' металл, '.' пол
 // 'T'/'C' — спавны команд, 'A'/'B' — точки на карте
 const RAW_MAP = [
-  '################################',
-  '#T.....#..........#...........A#',
-  '#..TT..#..#####...#...#####....#',
-  '#...#..#..#...#...#...#...#..A.#',
-  '#...#..X..#..X#.......#XXX#....#',
-  '#...####..#...#...#...#...#....#',
-  '#......#..#.......#...#...######',
-  '#......#..#####...#...#........#',
-  '####...#......#...#...####.....#',
-  '#......#..#...#...#......#..XX.#',
-  '#..#####..#...#...#..#...#..####',
-  '#.........#...#...#..#...#.....#',
-  '#..#####..#####...#..#...#.....#',
-  '#..#..........#...#..#####.....#',
-  '#..#..#####...#...#............#',
-  '#.....#...#...#...######..######',
-  '#######...#...#...D....#.......#',
-  '#.........#...#........#.......#',
-  '#..#####..#....................#',
-  '#..#...#..#..#####..####..###..#',
-  '#..#...#..#..#...#..#XX#..#....#',
-  '#..#......#..#...#..#..#..#..###',
-  '#..#..#####..#...#..#..#..#....#',
-  '#..#......#..#####..#..####....#',
-  '#..####...#.........#......#...#',
-  '#......#..###########......#...#',
-  '#..###.#..#....B....#..#####...#',
-  '#..#...#..#..#####..#..#.......#',
-  '#B.#...X..#..#...#..#..#....C..#',
-  '#..#####..#..#...#..#..#...CC..#',
-  '#..............................#',
-  '################################'
+'########################',
+'#TT..#.............AAA.#',
+'#TT..#..#####..#...AAA.#',
+'#....#..#...#..#.......#',
+'#..###..#...#..###..##.#',
+'#.......#...#....#..#..#',
+'#..####.#####..#.#..#..#',
+'#..#..........#.#...#..#',
+'#..#..#####...#.#####..#',
+'#.....#...#...#........#',
+'####..#.#.#...####..####',
+'#.....#.#.#.......#....#',
+'#..##...#.#####..##....#',
+'#..##.........#..#..##.#',
+'#.....#####...#..#..#..#',
+'#..#..#...#...#..#..#..#',
+'#..#..#.#.#...#..#..#..#',
+'#..#....#.....#..#.....#',
+'#..#####..#####..####..#',
+'#.BBB.....#...#........#',
+'#.BBB..##.#.#.#..###...#',
+'#.BBB..#..#.#.#..#.CCC.#',
+'#......#....#....#.CCC.#',
+'########################'
 ];
-const MW = 32, MH = RAW_MAP.length;
+const MW = 24, MH = RAW_MAP.length;
 const grid = new Uint8Array(MW * MH);          // 0 — пол, иначе индекс текстуры + 1
 const marks = { T: [], C: [], A: [], B: [] };
 
@@ -372,71 +377,156 @@ const CEIL_TEX = shadeSet(makeCeilTex());
 const shadeLevel = d => clamp(((1 / (1 + d * 0.16)) * LEVELS) | 0, 0, LEVELS - 1);
 
 // ---------------------------------------------------------- спрайты
-const SOLDIER = [
-  '.....HHHHHH.....',
-  '....HHHHHHHH....',
-  '....HffffffH....',
-  '....ffeffeff....',
-  '.....ffffff.....',
-  '......ffff......',
-  '....VVVVVVVV....',
-  '...VVVVVVVVVV...',
-  '..hVVVVVVVVggh..',
-  '..hVVVVVVVggVh..',
-  '...VVVVVVggVV...',
-  '...VVVVggVVVV...',
-  '....VVggVVVV....',
-  '....BBBBBBBB....',
-  '....LLLL LLLL...',
-  '....LLLL.LLLL...',
-  '....LLLL.LLLL...',
-  '....LLLL.LLLL...',
-  '...SSSSS.SSSSS..',
-  '...SSSSS.SSSSS..'
-];
-const CORPSE = [
-  '................',
-  '................',
-  '................',
-  '................',
-  '..SLLLVVVVffH...',
-  '.SSLLLVVVVfffH..',
-  '..SLLLVVVVffH...',
-  '................'
-];
-function buildSprite(art, pal, scale) {
-  const aw = art[0].length, ah = art.length, w = aw * scale, h = ah * scale;
-  const d = new Uint32Array(w * h);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const ch = art[(y / scale) | 0][(x / scale) | 0];
-    const c = pal[ch];
-    if (!c) { d[y * w + x] = 0; continue; }
-    const n = (hash2(x, y) - .5) * 18;
-    d[y * w + x] = packRGB(clamp(c[0] + n, 0, 255), clamp(c[1] + n, 0, 255), clamp(c[2] + n, 0, 255));
-  }
-  return { w, h, levels: shadeSet(d) };
+// Бойцы рисуются процедурно: три ракурса (спереди, сзади, в профиль) и две
+// фазы шага. Ракурс выбирается по тому, куда боец повёрнут относительно камеры,
+// поэтому силуэт больше не выглядит плоской «ходячей стеной».
+const SW = 32, SH = 72;                       // размер холста спрайта
+function sprBuf() { return { w: SW, h: SH, d: new Uint32Array(SW * SH) }; }
+function sRect(b, x, y, w, h, c) {
+  for (let yy = Math.max(0, y | 0); yy < Math.min(SH, (y + h) | 0); yy++)
+    for (let xx = Math.max(0, x | 0); xx < Math.min(SW, (x + w) | 0); xx++)
+      b.d[yy * SW + xx] = c;
 }
-const PAL_T = { H: [110, 92, 58], f: [206, 168, 130], e: [40, 34, 30], V: [190, 148, 84],
-                h: [206, 168, 130], B: [50, 44, 38], L: [122, 106, 70], S: [42, 38, 34],
-                g: [38, 40, 46] };
-const PAL_CT = { H: [40, 60, 96], f: [214, 178, 142], e: [40, 34, 30], V: [64, 104, 168],
-                 h: [214, 178, 142], B: [38, 42, 52], L: [58, 70, 92], S: [30, 34, 42],
-                 g: [30, 32, 38] };
-const SPR = {
-  T:  buildSprite(SOLDIER, PAL_T, 3),
-  CT: buildSprite(SOLDIER, PAL_CT, 3),
-  corpseT:  buildSprite(CORPSE, PAL_T, 3),
-  corpseCT: buildSprite(CORPSE, PAL_CT, 3)
-};
-// граната и взрыв
-SPR.nade = (function () {
-  const S = 16, d = new Uint32Array(S * S);
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const dx = x - 7.5, dy = y - 7.5, r = Math.hypot(dx, dy);
-    d[y * S + x] = r > 7 ? 0 : packRGB(60 + (7 - r) * 5, 78 + (7 - r) * 6, 44 + (7 - r) * 4);
+function sEll(b, cx, cy, rx, ry, c) {
+  for (let yy = Math.max(0, (cy - ry) | 0); yy <= Math.min(SH - 1, (cy + ry) | 0); yy++)
+    for (let xx = Math.max(0, (cx - rx) | 0); xx <= Math.min(SW - 1, (cx + rx) | 0); xx++) {
+      const dx = (xx - cx) / rx, dy = (yy - cy) / ry;
+      if (dx * dx + dy * dy <= 1) b.d[yy * SW + xx] = c;
+    }
+}
+function sTrap(b, y0, y1, wTop, wBot, cx, c) {            // торс/бёдра
+  for (let y = Math.max(0, y0 | 0); y < Math.min(SH, y1 | 0); y++) {
+    const t = (y - y0) / Math.max(1, y1 - y0), w = lerp(wTop, wBot, t);
+    sRect(b, cx - w / 2, y, w, 1, c);
   }
-  return { w: S, h: S, levels: shadeSet(d) };
-})();
+}
+function sOutline(b, c) {                                  // тёмный контур силуэта
+  const src = b.d.slice();
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+    if (src[y * SW + x]) continue;
+    const near = (x > 0 && src[y * SW + x - 1]) || (x < SW - 1 && src[y * SW + x + 1]) ||
+                 (y > 0 && src[(y - 1) * SW + x]) || (y < SH - 1 && src[(y + 1) * SW + x]);
+    if (near) b.d[y * SW + x] = c;
+  }
+}
+// палитры команд
+const PAL_T = { helmet: [122, 100, 62], skin: [206, 168, 130], eye: [38, 32, 28],
+                vest: [176, 138, 78], vestDark: [128, 98, 52], cloth: [150, 122, 72],
+                boots: [46, 40, 34], gun: [40, 42, 48], gunLite: [72, 74, 82],
+                pack: [110, 88, 52], line: [26, 22, 18] };
+const PAL_CT = { helmet: [46, 62, 92], skin: [214, 178, 142], eye: [38, 32, 28],
+                 vest: [62, 100, 158], vestDark: [42, 70, 116], cloth: [58, 74, 100],
+                 boots: [32, 36, 44], gun: [34, 36, 42], gunLite: [66, 68, 76],
+                 pack: [40, 54, 80], line: [16, 20, 28] };
+function buildSoldier(pal, view, frame) {
+  const b = sprBuf(), cx = 16;
+  const C = k => packRGB(pal[k][0], pal[k][1], pal[k][2]);
+  const helmet = C('helmet'), skin = C('skin'), vest = C('vest'), vestD = C('vestDark');
+  const cloth = C('cloth'), boots = C('boots'), gun = C('gun'), gunL = C('gunLite'), pack = C('pack');
+  const stride = frame ? 1 : 0;
+
+  // --- ноги (фаза шага)
+  const legY = 44, legH = 22;
+  if (view === 'side') {
+    const front = stride ? 4 : 1, back = stride ? -4 : -1;
+    sRect(b, cx - 3 + front, legY, 6, legH - 3, cloth);
+    sRect(b, cx - 3 + back, legY, 6, legH - 3, C('vestDark'));
+    sRect(b, cx - 4 + front, legY + legH - 4, 9, 5, boots);
+    sRect(b, cx - 4 + back, legY + legH - 4, 9, 5, boots);
+  } else {
+    const sp = stride ? 5 : 3;
+    sRect(b, cx - sp - 3, legY, 6, legH - 3, cloth);
+    sRect(b, cx + sp - 3, legY, 6, legH - 3, cloth);
+    sRect(b, cx - sp - 4, legY + legH - 4, 8, 5, boots);
+    sRect(b, cx + sp - 4, legY + legH - 4, 8, 5, boots);
+  }
+
+  // --- корпус
+  if (view === 'side') {
+    sTrap(b, 20, 44, 11, 10, cx, vest);
+    sRect(b, cx - 6, 24, 5, 14, vestD);                  // разгрузка сбоку
+    sRect(b, cx - 8, 22, 4, 12, pack);                   // рюкзак за спиной
+  } else {
+    sTrap(b, 20, 44, 17, 14, cx, vest);
+    if (view === 'back') sRect(b, cx - 6, 24, 12, 15, pack);
+    else { sRect(b, cx - 5, 24, 10, 13, vestD); sRect(b, cx - 5, 39, 10, 4, C('cloth')); }
+  }
+  sRect(b, cx - 8, 42, 16, 3, boots);                    // пояс
+
+  // --- голова
+  sRect(b, cx - 2, 17, 4, 4, skin);                      // шея
+  if (view === 'back') {
+    sEll(b, cx, 12, 6, 7, helmet);
+    sRect(b, cx - 5, 15, 10, 4, skin);
+  } else if (view === 'side') {
+    sEll(b, cx, 12, 6, 7, skin);
+    sEll(b, cx - 1, 10, 6, 5, helmet);
+    sRect(b, cx + 3, 12, 3, 2, C('eye'));
+  } else {
+    sEll(b, cx, 13, 5, 6, skin);
+    sEll(b, cx, 10, 6, 5, helmet);
+    sRect(b, cx - 6, 12, 12, 2, C('helmet'));            // козырёк каски
+    sRect(b, cx - 3, 14, 2, 2, C('eye'));
+    sRect(b, cx + 1, 14, 2, 2, C('eye'));
+  }
+
+  // --- руки и оружие
+  if (view === 'side') {
+    sRect(b, cx + 1, 26, 12, 4, gun);                    // ствол вперёд
+    sRect(b, cx + 11, 27, 8, 2, gunL);
+    sRect(b, cx - 2, 29, 5, 6, gun);                     // магазин
+    sRect(b, cx + 2, 24, 5, 7, skin);                    // рука
+  } else if (view === 'back') {
+    sRect(b, cx - 9, 23, 4, 14, vest);
+    sRect(b, cx + 5, 23, 4, 14, vest);
+    sRect(b, cx + 2, 16, 3, 12, gun);                    // ствол из-за плеча
+    sRect(b, cx + 1, 14, 5, 3, gunL);
+  } else {
+    sRect(b, cx - 10, 23, 5, 12, vest);                  // плечи-руки
+    sRect(b, cx + 5, 23, 5, 12, vest);
+    sRect(b, cx - 12, 30, 20, 4, gun);                   // оружие поперёк груди
+    sRect(b, cx - 14, 31, 4, 2, gunL);
+    sRect(b, cx - 3, 33, 4, 6, gun);
+    sRect(b, cx - 11, 33, 5, 4, skin);                   // кисти
+    sRect(b, cx + 2, 28, 5, 4, skin);
+  }
+
+  sOutline(b, C('line'));
+  sEll(b, cx, 68, 11, 3, packRGB(28, 26, 24));           // контактная тень под ногами
+  return { w: SW, h: SH, levels: shadeSet(b.d) };
+}
+function buildCorpse(pal) {
+  const b = sprBuf(), cy = 58;
+  const C = k => packRGB(pal[k][0], pal[k][1], pal[k][2]);
+  sEll(b, 16, cy + 6, 14, 4, packRGB(30, 28, 26));       // тень
+  sRect(b, 6, cy - 4, 15, 8, C('vest'));                 // корпус
+  sRect(b, 19, cy - 3, 8, 6, C('cloth'));                // ноги
+  sEll(b, 5, cy - 1, 4, 4, C('skin'));                   // голова
+  sEll(b, 4, cy - 3, 4, 3, C('helmet'));
+  sRect(b, 10, cy + 2, 12, 3, C('gun'));                 // выпавшее оружие
+  sOutline(b, C('line'));
+  return { w: SW, h: SH, levels: shadeSet(b.d) };
+}
+const SPR = {};
+for (const [team, pal] of [['T', PAL_T], ['CT', PAL_CT]]) {
+  SPR[team] = {
+    front: [buildSoldier(pal, 'front', 0), buildSoldier(pal, 'front', 1)],
+    back:  [buildSoldier(pal, 'back', 0),  buildSoldier(pal, 'back', 1)],
+    side:  [buildSoldier(pal, 'side', 0),  buildSoldier(pal, 'side', 1)]
+  };
+  SPR['corpse' + team] = buildCorpse(pal);
+}
+// какой ракурс показать: зависит от того, куда боец смотрит относительно камеры
+function actorSprite(a, camX, camY) {
+  const toCam = Math.atan2(camY - a.y, camX - a.x);
+  let d = (a.ang - toCam + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+  const moving = a.moving && (Math.floor(G.time * 5 + (a.phase || 0)) % 2 === 0);
+  const set = SPR[a.team] || SPR.T;
+  const f = moving ? 1 : 0;
+  if (Math.abs(d) < .7) return { s: set.front[f], flip: false };
+  if (Math.abs(d) > 2.44) return { s: set.back[f], flip: false };
+  return { s: set.side[f], flip: d < 0 };
+}
 SPR.bomb = (function () {
   const S = 16, d = new Uint32Array(S * S);
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
@@ -538,7 +628,6 @@ const SHOP = [
 const DIFFS = {
   easy: {
     label: 'Лёгкая', money: 2000,
-    count: r => clamp(1 + Math.ceil(r / 3), 2, 4),      // 2 бота в начале, максимум 4
     tier:  r => clamp((r / 4) | 0, 0, 1),               // только пистолеты и MP5
     hp: 65, armorFrom: 99,                              // без брони
     react: [.85, 1.5],                                  // почти полторы секунды на реакцию
@@ -548,7 +637,6 @@ const DIFFS = {
   },
   normal: {
     label: 'Средняя', money: 800,
-    count: r => clamp(2 + Math.ceil(r / 2), 3, 6),
     tier:  r => clamp((r / 2) | 0, 0, 5),
     hp: 100, armorFrom: 3,
     react: [.22, .5],
@@ -558,7 +646,6 @@ const DIFFS = {
   },
   hard: {
     label: 'Сложная', money: 800,
-    count: r => clamp(3 + Math.ceil(r / 2), 4, 7),
     tier:  r => clamp(1 + ((r / 2) | 0), 0, 5),
     hp: 100, armorFrom: 1,
     react: [.13, .3],
@@ -571,13 +658,14 @@ const DIFFS = {
 // ---------------------------------------------------------- состояние
 const G = {
   state: 'menu',          // menu | play | over
-  round: 1, winsCT: 0, winsT: 0,
+  round: 1,
   roundT: 0, roundLen: 115, buyTime: 20,
   phase: 'live',          // live | end
   endAt: 0, endWin: false,
   diff: DIFFS.easy, quality: 1,
   time: 0, shake: 0, flash: 0, hurt: 0, hitmark: 0, hitHS: false,
   bomb: null, bombTime: 40, plantTime: 3.2, defuseTime: 5,
+  rounds: 6, foeCount: 3, allyCount: 2, myWins: 0, foeWins: 0, spec: null,
   dmgDir: 0, dmgT: -9
 };
 const P = {
@@ -585,9 +673,10 @@ const P = {
   hp: 100, armor: 0, helmet: false, money: 800, alive: true,
   cur: 'glock', nades: 0, guns: {}, nextFire: 0, reloadEnd: 0,
   scoped: false, bob: 0, kills: 0, deaths: 0, vx: 0, vy: 0, footT: 0,
-  eye: .5, crouch: 0, sprayI: 0, lastShot: -9
+  eye: .6, crouch: 0, sprayI: 0, lastShot: -9,
+  team: 'T', hasBomb: false, diedThisRound: false
 };
-const bots = [], nades = [], fx = [], feed = [], parts = [], shells = [];
+const actors = [], nades = [], fx = [], feed = [], parts = [], shells = [];
 
 function giveGun(key) {
   const w = WEAPONS[key];
@@ -663,156 +752,230 @@ function moveEntity(e, dx, dy, r) {
   else if (!solid(e.x, e.y + dy)) e.y += dy;
 }
 
-// ---------------------------------------------------------- боты
+// ---------------------------------------------------------- бойцы
 const BOT_LOADOUT = [
   ['glock', 'glock', 'usp'], ['glock', 'usp', 'mp5'], ['mp5', 'usp', 'ak'],
   ['ak', 'mp5', 'deagle'], ['ak', 'ak', 'm4'], ['ak', 'm4', 'awp']
 ];
-const BOT_NAMES = ['Фантом', 'Барс', 'Кобра', 'Сокол', 'Викинг', 'Гюрза',
-                   'Ворон', 'Тень', 'Шакал', 'Титан', 'Рысь', 'Скорпион'];
-function spawnBots() {
-  bots.length = 0;
+const FOE_NAMES  = ['Фантом', 'Барс', 'Кобра', 'Гюрза', 'Шакал', 'Скорпион'];
+const ALLY_NAMES = ['Сокол', 'Викинг', 'Ворон', 'Титан', 'Рысь', 'Зубр'];
+// напарники: чуть слабее, чем «средний» бот, чтобы работа осталась и игроку
+const ALLY_PROFS = {
+  easy:   { hp: 100, armorFrom: 3, react: [.5, 1], acc: .32, accFall: 24,
+            rof: 1.3, hs: .04, dmg: 1, speed: 1, sight: 19, hearing: 12, memory: 6 },
+  normal: { hp: 100, armorFrom: 3, react: [.4, .8], acc: .45, accFall: 26,
+            rof: 1.15, hs: .05, dmg: 1, speed: 1, sight: 20, hearing: 12, memory: 6 },
+  hard:   { hp: 100, armorFrom: 2, react: [.3, .6], acc: .55, accFall: 30,
+            rof: 1, hs: .08, dmg: 1, speed: 1.05, sight: 22, hearing: 14, memory: 7 }
+};
+function allyProf() {
+  for (const k in DIFFS) if (DIFFS[k] === G.diff) return ALLY_PROFS[k];
+  return ALLY_PROFS.normal;
+}
+
+function spawnActors() {
+  actors.length = 0;
   const D = G.diff;
-  const count = D.count(G.round);
   const pool = BOT_LOADOUT[clamp(D.tier(G.round), 0, BOT_LOADOUT.length - 1)];
-  const spots = marks.T.length ? marks.T : openTiles;
-  for (let i = 0; i < count; i++) {
-    const s = spots[i % spots.length];
-    bots.push({
-      x: s.x + rnd(-.3, .3), y: s.y + rnd(-.3, .3), ang: rnd(0, 6.28),
-      hp: D.hp, armor: G.round >= D.armorFrom ? 100 : 0, alive: true, deadAt: 0,
-      weapon: pool[(Math.random() * pool.length) | 0],
+  const foeTeam = P.team === 'T' ? 'CT' : 'T';
+  const spawnOf = team => (team === 'T' ? marks.T : marks.C);
+
+  const make = (team, prof, names, i, offset) => {
+    const spots = spawnOf(team), s = spots[(i + offset) % spots.length];
+    actors.push({
+      team: team, name: names[i % names.length],
+      x: s.x + rnd(-.22, .22), y: s.y + rnd(-.22, .22), ang: rnd(0, 6.28),
+      hp: prof.hp, armor: G.round >= prof.armorFrom ? 100 : 0, alive: true, deadAt: 0,
+      prof: prof, weapon: pool[(Math.random() * pool.length) | 0],
       mag: 30, reloadEnd: 0, nextFire: 0, reactAt: 0,
       alertAt: -99, lastX: s.x, lastY: s.y, step: null, pathAt: 0,
       goal: openTiles[(Math.random() * openTiles.length) | 0],
       strafe: Math.random() < .5 ? 1 : -1, strafeAt: 0,
-      hasBomb: false, planting: 0, pickup: false,
-      name: BOT_NAMES[(i + ((Math.random() * BOT_NAMES.length) | 0)) % BOT_NAMES.length]
+      hasBomb: false, planting: 0, defusing: 0, pickup: false,
+      moving: false, phase: Math.random() * 6
     });
-  }
+  };
+  for (let i = 0; i < G.foeCount; i++)  make(foeTeam, D, FOE_NAMES, i, 0);
+  const AP = allyProf();
+  for (let i = 0; i < G.allyCount; i++) make(P.team, AP, ALLY_NAMES, i, 1);
+
   resetBomb();
-  bots[(Math.random() * bots.length) | 0].hasBomb = true;   // один несёт C4
+  if (P.team === 'T') P.hasBomb = true;                 // C4 всегда у игрока-террориста
+  else {
+    const ts = actors.filter(a => a.team === 'T');
+    if (ts.length) ts[(Math.random() * ts.length) | 0].hasBomb = true;
+  }
 }
-function botSees(b) {
-  return P.alive && Math.hypot(P.x - b.x, P.y - b.y) < G.diff.sight && losClear(b.x, b.y, P.x, P.y);
+function aliveCount(team) {
+  let n = (P.alive && P.team === team) ? 1 : 0;
+  for (const a of actors) if (a.alive && a.team === team) n++;
+  return n;
 }
-function updateBot(b, dt) {
+// ближайшая видимая цель из чужой команды (игрок тоже цель)
+function findTarget(a) {
+  let best = null, bd = a.prof.sight;
+  if (P.alive && P.team !== a.team) {
+    const d = Math.hypot(P.x - a.x, P.y - a.y);
+    if (d < bd && losClear(a.x, a.y, P.x, P.y)) { best = P; bd = d; }
+  }
+  for (const o of actors) {
+    if (!o.alive || o.team === a.team) continue;
+    const d = Math.hypot(o.x - a.x, o.y - a.y);
+    if (d >= bd || !losClear(a.x, a.y, o.x, o.y)) continue;
+    best = o; bd = d;
+  }
+  return best;
+}
+function alarm(a, x, y, delay) {                        // услышал выстрел / увидел врага
+  if (G.time - a.alertAt > 3) a.reactAt = G.time + delay;
+  a.alertAt = G.time; a.lastX = x; a.lastY = y;
+}
+
+function updateActor(a, dt) {
   const t = G.time;
-  if (!b.alive) return;
-  const D = G.diff;
-  const w = WEAPONS[b.weapon];
-  const dist = Math.hypot(P.x - b.x, P.y - b.y);
-  const sees = botSees(b);
+  if (!a.alive) { a.moving = false; return; }
+  const D = a.prof, w = WEAPONS[a.weapon], bmb = G.bomb;
+  a.moving = false;
 
-  if (sees) {
-    if (t - b.alertAt > 3) b.reactAt = t + rnd(D.react[0], D.react[1]);   // время реакции
-    b.alertAt = t; b.lastX = P.x; b.lastY = P.y;
+  // --- закладка и разминирование обездвиживают
+  if (a.planting) {
+    if (t - a.planting >= G.plantTime) plantBombAt(a.x, a.y, a);
+    return;
   }
-  const alerted = t - b.alertAt < D.memory;
-  b.ang = sees ? Math.atan2(P.y - b.y, P.x - b.x)
-               : lerp(b.ang, Math.atan2(b.lastY - b.y, b.lastX - b.x), .08);
-
-  // --- закладка бомбы: носитель идёт на точку и замирает
-  const bmb = G.bomb;
-  if (b.planting) {
-    if (t - b.planting >= G.plantTime) plantBomb(b);
-    return;                                          // во время закладки не двигается и не стреляет
-  }
-  if (b.hasBomb && bmb && bmb.state === 'carried') {
-    const site = bmb.site;
-    if (Math.hypot(site.x - b.x, site.y - b.y) < .8) { b.planting = t; SFX.defuse(); return; }
-  }
-
-  // --- перемещение
-  let tx, ty, speed;
-  if (b.hasBomb && bmb && bmb.state === 'carried') { // несёт бомбу — идёт на точку
-    tx = bmb.site.x; ty = bmb.site.y; speed = 2.3 * D.speed;
-  } else if (b.pickup && bmb && bmb.state === 'dropped') {
-    tx = bmb.x; ty = bmb.y; speed = 2.4 * D.speed;
-  } else if (alerted) { tx = b.lastX; ty = b.lastY; speed = 2.5 * D.speed; }
-  else if (bmb && bmb.state === 'planted') {         // после закладки — держат точку
-    if (!b.goal || Math.hypot(b.goal.x - b.x, b.goal.y - b.y) < .8 ||
-        Math.hypot(b.goal.x - bmb.x, b.goal.y - bmb.y) > 6) {
-      const near = openTiles.filter(o => Math.hypot(o.x - bmb.x, o.y - bmb.y) < 5);
-      b.goal = near.length ? near[(Math.random() * near.length) | 0] : b.goal;
+  if (a.defusing) {
+    if (!bmb || bmb.state !== 'planted' || Math.hypot(a.x - bmb.x, a.y - bmb.y) > 1.6) { a.defusing = 0; }
+    else {
+      bmb.defuse = Math.max(bmb.defuse, (t - a.defusing) / (G.defuseTime * 1.5) * G.defuseTime);
+      if (t - a.defusing >= G.defuseTime * 1.5) {
+        bmb.state = 'defused'; endSide('CT', 'Бомбу обезвредил ' + a.name);
+      }
+      return;
     }
-    tx = b.goal ? b.goal.x : bmb.x; ty = b.goal ? b.goal.y : bmb.y; speed = 1.7 * D.speed;
+  }
+
+  const target = findTarget(a);
+  if (target) alarm(a, target.x, target.y, rnd(D.react[0], D.react[1]));
+  const alerted = t - a.alertAt < D.memory;
+  const dist = target ? Math.hypot(target.x - a.x, target.y - a.y) : 99;
+  a.ang = target ? Math.atan2(target.y - a.y, target.x - a.x)
+                 : lerp(a.ang, Math.atan2(a.lastY - a.y, a.lastX - a.x), .08);
+
+  // --- задачи по бомбе
+  if (a.team === 'T' && a.hasBomb && bmb && bmb.state === 'carried' &&
+      Math.hypot(bmb.site.x - a.x, bmb.site.y - a.y) < bmb.site.r * .7) { a.planting = t; SFX.defuse(); return; }
+  if (a.team === 'CT' && bmb && bmb.state === 'planted' &&
+      Math.hypot(bmb.x - a.x, bmb.y - a.y) < 1.2 && !(target && dist < 7)) { a.defusing = t; return; }
+
+  // --- куда идти
+  let tx, ty, speed = 2 * D.speed;
+  if (a.team === 'T' && a.hasBomb && bmb && bmb.state === 'carried') {
+    tx = bmb.site.x; ty = bmb.site.y; speed = 2.3 * D.speed;
+  } else if (a.pickup && bmb && bmb.state === 'dropped') {
+    tx = bmb.x; ty = bmb.y; speed = 2.4 * D.speed;
+  } else if (a.team === 'CT' && bmb && bmb.state === 'planted') {
+    tx = bmb.x; ty = bmb.y; speed = 2.5 * D.speed;       // бегут снимать
+  } else if (alerted) {
+    tx = a.lastX; ty = a.lastY; speed = 2.5 * D.speed;
+  } else if (a.team === 'T' && bmb && bmb.state === 'planted') {
+    if (!a.goal || Math.hypot(a.goal.x - a.x, a.goal.y - a.y) < .8 ||
+        Math.hypot(a.goal.x - bmb.x, a.goal.y - bmb.y) > 6) {
+      const near = openTiles.filter(o => Math.hypot(o.x - bmb.x, o.y - bmb.y) < 5);
+      if (near.length) a.goal = near[(Math.random() * near.length) | 0];
+    }
+    tx = a.goal.x; ty = a.goal.y; speed = 1.8 * D.speed;
   } else {
-    if (!b.goal || Math.hypot(b.goal.x - b.x, b.goal.y - b.y) < .8)
-      b.goal = openTiles[(Math.random() * openTiles.length) | 0];
-    tx = b.goal.x; ty = b.goal.y; speed = 1.7 * D.speed;
+    if (!a.goal || Math.hypot(a.goal.x - a.x, a.goal.y - a.y) < .8)
+      a.goal = openTiles[(Math.random() * openTiles.length) | 0];
+    tx = a.goal.x; ty = a.goal.y; speed = 1.7 * D.speed;
   }
-  if (t > b.pathAt) { b.pathAt = t + .35; b.step = nextStep(b.x, b.y, tx, ty); }
-  if (sees && dist < 5.5 && !b.hasBomb && !b.pickup) {   // ближний бой — стрейф
-    if (t > b.strafeAt) { b.strafeAt = t + rnd(.6, 1.6); b.strafe = -b.strafe; }
-    const a = b.ang + Math.PI / 2 * b.strafe;
-    moveEntity(b, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt, .3);
-  } else if (b.step) {
-    const a = Math.atan2(b.step.y - b.y, b.step.x - b.x);
-    moveEntity(b, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt, .3);
-    if (Math.hypot(b.step.x - b.x, b.step.y - b.y) < .25) b.step = null;
+  if (t > a.pathAt) { a.pathAt = t + .35; a.step = nextStep(a.x, a.y, tx, ty); }
+
+  const before = a.x + a.y;
+  if (target && dist < 5.5 && !a.hasBomb && !a.pickup) {  // ближний бой — стрейф
+    if (t > a.strafeAt) { a.strafeAt = t + rnd(.6, 1.6); a.strafe = -a.strafe; }
+    const ang = a.ang + Math.PI / 2 * a.strafe;
+    moveEntity(a, Math.cos(ang) * speed * dt, Math.sin(ang) * speed * dt, .3);
+  } else if (a.step) {
+    const ang = Math.atan2(a.step.y - a.y, a.step.x - a.x);
+    moveEntity(a, Math.cos(ang) * speed * dt, Math.sin(ang) * speed * dt, .3);
+    if (Math.hypot(a.step.x - a.x, a.step.y - a.y) < .25) a.step = null;
   }
+  a.moving = Math.abs(a.x + a.y - before) > 1e-4;
 
   // --- стрельба
-  if (sees && t > b.reactAt && t > b.nextFire && t > b.reloadEnd) {
-    if (b.mag <= 0) { b.mag = w.mag; b.reloadEnd = t + w.reload; SFX.reload(); return; }
-    b.mag--;
-    b.nextFire = t + w.rate * D.rof * (w.auto ? rnd(1, 1.5) : rnd(1.4, 2.6));
-    const vol = clamp(1.6 / (1 + dist * .35), .05, 1);
+  if (target && t > a.reactAt && t > a.nextFire && t > a.reloadEnd) {
+    if (a.mag <= 0) { a.mag = w.mag; a.reloadEnd = t + w.reload; return; }
+    a.mag--;
+    a.nextFire = t + w.rate * D.rof * (w.auto ? rnd(1, 1.5) : rnd(1.4, 2.6));
+    const vol = clamp(1.6 / (1 + Math.hypot(P.x - a.x, P.y - a.y) * .35), .04, 1);
     SFX.shot(w, vol);
-    // точность падает с дистанцией; на лёгком боты мажут почти всегда
-    const acc = clamp((1 - dist / D.accFall) * D.acc * (P.crouch ? .85 : 1), .03, .9);
+    for (const o of actors) if (o.alive && o !== a && Math.hypot(o.x - a.x, o.y - a.y) < D.hearing)
+      alarm(o, a.x, a.y, rnd(.3, .8));
+    const isPlayer = target === P;
+    const acc = clamp((1 - dist / D.accFall) * D.acc * (isPlayer && P.crouch ? .85 : 1), .03, .9);
     if (Math.random() < acc) {
       const head = Math.random() < D.hs;
       let dmg = w.dmg * D.dmg * clamp(1 - dist * .012, .55, 1);
-      if (head) dmg *= P.helmet ? w.hs * .38 : w.hs;
-      hurtPlayer(dmg, b, head);
+      if (head) dmg *= (isPlayer && P.helmet) ? w.hs * .38 : w.hs;
+      if (isPlayer) hurtPlayer(dmg, a, head);
+      else hurtActor(target, dmg, head, a.weapon, false, a);
     }
   }
 }
 
 // ---------------------------------------------------------- бомба C4
-// Один из террористов несёт C4 и идёт закладывать её на точку A или B.
-// Если носителя убить, бомбу подберёт следующий. После закладки у игрока
-// есть 40 секунд, чтобы разминировать её (удерживать E рядом).
+// C4 всегда у стороны T. Играешь за террориста — несёшь её сам и закладываешь
+// на точке A или B (удерживая E). Играешь за CT — ищешь заложенную бомбу и
+// снимаешь её тем же E; напарники и боты противника делают то же самое.
 const SITES = [];
 function initSites() {
   SITES.length = 0;
-  for (const m of marks.A) SITES.push({ x: m.x, y: m.y, name: 'A' });
-  for (const m of marks.B) SITES.push({ x: m.x, y: m.y, name: 'B' });
-  if (!SITES.length) SITES.push({ x: openTiles[0].x, y: openTiles[0].y, name: 'A' });
+  for (const [name, list] of [['A', marks.A], ['B', marks.B]]) {
+    if (!list.length) continue;
+    const cx = list.reduce((s, m) => s + m.x, 0) / list.length;
+    const cy = list.reduce((s, m) => s + m.y, 0) / list.length;
+    SITES.push({ x: cx, y: cy, name: name, r: 2.6 });
+  }
+  if (!SITES.length) SITES.push({ x: openTiles[0].x, y: openTiles[0].y, name: 'A', r: 2.6 });
+}
+function siteAt(x, y) {                                  // на какой точке мы стоим
+  for (const s of SITES) if (Math.hypot(s.x - x, s.y - y) < s.r) return s;
+  return null;
 }
 function resetBomb() {
   const site = SITES[(Math.random() * SITES.length) | 0];
-  G.bomb = { state: 'carried', x: 0, y: 0, site: site, plantAt: 0, planted: 0,
-             defuse: 0, beepAt: 0, defuseBeep: 0 };
+  G.bomb = { state: 'carried', x: 0, y: 0, site: site, planted: 0,
+             defuse: 0, beepAt: 0, defuseBeep: 0, plantProg: 0 };
 }
-function bombCarrier() { return bots.find(b => b.alive && b.hasBomb) || null; }
-function dropBomb(b) {
-  if (!b.hasBomb || !G.bomb || G.bomb.state !== 'carried') return;
-  b.hasBomb = false;
-  G.bomb.state = 'dropped'; G.bomb.x = b.x; G.bomb.y = b.y;
+function dropBombFrom(who) {
+  if (!who.hasBomb || !G.bomb || G.bomb.state !== 'carried') return;
+  who.hasBomb = false;
+  G.bomb.state = 'dropped'; G.bomb.x = who.x; G.bomb.y = who.y;
 }
-function plantBomb(b) {
-  G.bomb.state = 'planted'; G.bomb.x = b.x; G.bomb.y = b.y;
-  G.bomb.planted = G.time; b.hasBomb = false; b.planting = 0;
+function plantBombAt(x, y, who) {
+  const bmb = G.bomb;
+  bmb.state = 'planted'; bmb.x = x; bmb.y = y; bmb.planted = G.time;
+  bmb.site = siteAt(x, y) || bmb.site;
+  if (who) { who.hasBomb = false; who.planting = 0; }
+  P.hasBomb = false; bmb.plantProg = 0;
   SFX.plant();
-  showMsg('БОМБА ЗАЛОЖЕНА НА ' + G.bomb.site.name, 'Удерживай E рядом с ней, чтобы обезвредить');
+  showMsg('БОМБА ЗАЛОЖЕНА НА ' + bmb.site.name,
+          P.team === 'T' ? 'Держите точку до взрыва' : 'Найди C4 и удерживай E');
 }
 function bombExplode() {
   const bmb = G.bomb;
   bmb.state = 'exploded';
   SFX.boom(); G.shake = 1.4; G.flash = 1;
   fx.push({ type: 'boom', x: bmb.x, y: bmb.y, z: .4, t: G.time + .7, born: G.time });
-  const d = Math.hypot(P.x - bmb.x, P.y - bmb.y);
-  if (P.alive && d < 9) { P.armor = 0; hurtPlayer(400, null, false); }
-  endRound(false, 'Бомба взорвалась');
+  endSide('T', 'Бомба взорвалась');                       // раунд решён взрывом,
+  for (const a of actors) if (a.alive && Math.hypot(a.x - bmb.x, a.y - bmb.y) < 9)
+    hurtActor(a, 400, false, 'he', false, null);          // а уже потом считаем жертвы
+  if (P.alive && Math.hypot(P.x - bmb.x, P.y - bmb.y) < 9) { P.armor = 0; hurtPlayer(400, null, false); }
 }
-// время раунда вышло: если бомбу не заложили — раунд за CT (как в CS)
 function checkRoundTime() {
   if (G.phase !== 'live' || G.roundT <= G.roundLen) return;
-  if (G.bomb && G.bomb.state === 'planted') return;      // теперь считает таймер C4
-  endRound(true, 'Время вышло, бомба не заложена');
+  if (G.bomb && G.bomb.state === 'planted') return;      // дальше считает таймер C4
+  endSide('CT', 'Время вышло, бомба не заложена');
 }
 function updateBomb(dt) {
   const bmb = G.bomb;
@@ -821,31 +984,43 @@ function updateBomb(dt) {
   if (bmb.state === 'planted') {
     const left = G.bombTime - (G.time - bmb.planted);
     if (left <= 0) { bombExplode(); return; }
-    if (G.time > bmb.beepAt) {                       // писк ускоряется к взрыву
+    if (G.time > bmb.beepAt) {
       bmb.beepAt = G.time + clamp(.14 + (left / G.bombTime) * .9, .14, 1.05);
       SFX.beep(left < 10 ? 1500 : 1100);
     }
-    // разминирование: удерживать E рядом
-    const near = P.alive && Math.hypot(P.x - bmb.x, P.y - bmb.y) < 1.5;
-    if (near && keys['e']) {
-      bmb.defuse += dt;
-      if (G.time > bmb.defuseBeep) { bmb.defuseBeep = G.time + .3; SFX.defuse(); }
-      if (bmb.defuse >= G.defuseTime) {
-        bmb.state = 'defused';
-        endRound(true, 'Бомба обезврежена');
-      }
-    } else bmb.defuse = Math.max(0, bmb.defuse - dt * 1.5);
+    if (P.team === 'CT') {                               // игрок снимает бомбу
+      const near = P.alive && Math.hypot(P.x - bmb.x, P.y - bmb.y) < 1.5;
+      if (near && keys['e']) {
+        bmb.defuse += dt;
+        if (G.time > bmb.defuseBeep) { bmb.defuseBeep = G.time + .3; SFX.defuse(); }
+        if (bmb.defuse >= G.defuseTime) { bmb.state = 'defused'; endSide('CT', 'Бомба обезврежена'); }
+      } else if (!actors.some(a => a.alive && a.defusing)) bmb.defuse = Math.max(0, bmb.defuse - dt * 1.5);
+    }
     return;
   }
 
-  // никто не несёт — ближайший бот идёт подбирать
+  // игрок-террорист закладывает C4
+  if (P.team === 'T' && P.hasBomb && P.alive) {
+    const site = siteAt(P.x, P.y);
+    if (site && keys['e'] && moveSpeed() < .12) {
+      bmb.plantProg += dt;
+      if (G.time > bmb.defuseBeep) { bmb.defuseBeep = G.time + .3; SFX.defuse(); }
+      if (bmb.plantProg >= G.plantTime) plantBombAt(P.x, P.y, null);
+    } else bmb.plantProg = Math.max(0, bmb.plantProg - dt * 2);
+  }
+
+  // бомба на земле — ближайший террорист бежит за ней
   if (bmb.state === 'dropped') {
     let best = null, bd = 1e9;
-    for (const b of bots) {
-      b.pickup = false;
-      if (!b.alive) continue;
-      const d = Math.hypot(b.x - bmb.x, b.y - bmb.y);
-      if (d < bd) { bd = d; best = b; }
+    for (const a of actors) {
+      a.pickup = false;
+      if (!a.alive || a.team !== 'T') continue;
+      const d = Math.hypot(a.x - bmb.x, a.y - bmb.y);
+      if (d < bd) { bd = d; best = a; }
+    }
+    if (P.alive && P.team === 'T' && Math.hypot(P.x - bmb.x, P.y - bmb.y) < .8) {
+      P.hasBomb = true; bmb.state = 'carried'; showMsg('C4 ПОДОБРАНА', 'Заложи её на точке A или B');
+      return;
     }
     if (best) {
       best.pickup = true;
@@ -859,6 +1034,17 @@ function applyArmor(dmg, ent) {
   if (ent.armor > 0) { ent.armor = Math.max(0, ent.armor - dmg * .5); return dmg * .72; }
   return dmg;
 }
+function endSide(side, reason) { endRound(side === P.team, reason); }
+function checkRoundOutcome() {
+  if (G.phase !== 'live') return;
+  const bmb = G.bomb, tA = aliveCount('T'), ctA = aliveCount('CT');
+  if (bmb && bmb.state === 'planted') {                 // после закладки решает C4
+    if (ctA === 0) endSide('T', 'Контр-террористы уничтожены');
+    return;
+  }
+  if (tA === 0) endSide('CT', 'Террористы уничтожены');
+  else if (ctA === 0) endSide('T', 'Контр-террористы уничтожены');
+}
 function hurtPlayer(dmg, src, head) {
   if (!P.alive) return;
   dmg = applyArmor(dmg, P);
@@ -867,26 +1053,33 @@ function hurtPlayer(dmg, src, head) {
   G.hurt = 1; G.shake = Math.min(1, G.shake + dmg / 120);
   SFX.hurt();
   if (P.hp <= 0) {
-    P.hp = 0; P.alive = false; P.deaths++;
-    addFeed(src ? (src.name || 'Террорист') : 'Взрыв', 'ТЫ', head, false);
-    endRound(false);
+    P.hp = 0; P.alive = false; P.deaths++; P.diedThisRound = true;
+    dropBombFrom(P);
+    addFeed(src ? (src.name || 'Взрыв') : 'Взрыв', 'ТЫ', head, false);
+    checkRoundOutcome();
   }
 }
-function hurtBot(b, dmg, head, wkey) {
-  dmg = applyArmor(dmg, b);
-  b.hp -= dmg;
-  G.hitmark = .18; G.hitHS = !!head;
-  head ? SFX.hs() : SFX.hit();
-  if (b.hp <= 0 && b.alive) {
-    b.alive = false; b.deadAt = G.time; b.planting = 0; dropBomb(b); P.kills++;
-    P.money = Math.min(16000, P.money + (WEAPONS[wkey] ? WEAPONS[wkey].reward : 300));
-    addFeed('ТЫ', b.name || 'Террорист', head, true);
-    if (bots.every(x => !x.alive) && G.bomb && G.bomb.state !== 'planted')
-      endRound(true, 'Террористы уничтожены');
+function hurtActor(a, dmg, head, wkey, byPlayer, attacker) {
+  if (!a.alive) return;
+  dmg = applyArmor(dmg, a);
+  a.hp -= dmg;
+  if (byPlayer) { G.hitmark = .18; G.hitHS = !!head; head ? SFX.hs() : SFX.hit(); }
+  if (a.hp <= 0) {
+    a.alive = false; a.deadAt = G.time; a.planting = 0; a.defusing = 0;
+    dropBombFrom(a);
+    if (byPlayer) {
+      P.kills++;
+      P.money = Math.min(16000, P.money + (WEAPONS[wkey] ? WEAPONS[wkey].reward : 300));
+      addFeed('ТЫ', a.name, head, true);
+    } else {
+      addFeed(attacker ? attacker.name : 'Взрыв', a.name, head,
+              !!attacker && attacker.team === P.team);
+    }
+    checkRoundOutcome();
   }
 }
-function addFeed(killer, victim, head, byPlayer) {
-  feed.unshift({ killer, victim, head, byPlayer, t: G.time });
+function addFeed(killer, victim, head, friendly) {
+  feed.unshift({ killer, victim, head, byPlayer: friendly, t: G.time });
   if (feed.length > 5) feed.pop();
 }
 
@@ -952,14 +1145,14 @@ function fire() {
   if (w.cat === 'melee') {                                   // нож
     P.nextFire = t + w.rate; SFX.knife();
     let best = null, bd = 1e9;
-    for (const b of bots) {
-      if (!b.alive) continue;
+    for (const b of actors) {
+      if (!b.alive || b.team === P.team) continue;
       const d = Math.hypot(b.x - P.x, b.y - P.y);
       if (d > w.range || d > bd) continue;
       let da = Math.abs(((Math.atan2(b.y - P.y, b.x - P.x) - viewAng() + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
       if (da < .8) { best = b; bd = d; }
     }
-    if (best) hurtBot(best, w.dmg * (Math.random() < .25 ? w.hs : 1), false, 'knife');
+    if (best) hurtActor(best, w.dmg * (Math.random() < .25 ? w.hs : 1), false, 'knife', true, null);
     return;
   }
 
@@ -989,32 +1182,30 @@ function fire() {
   const slope = viewPitch() + rnd(-1, 1) * sp;
   const dx = Math.cos(a), dy = Math.sin(a);
   let target = null, tDist = 1e9, head = false;
-  for (const b of bots) {
-    if (!b.alive) continue;
+  for (const b of actors) {
+    if (!b.alive || b.team === P.team) continue;
     const vx = b.x - P.x, vy = b.y - P.y;
     const along = vx * dx + vy * dy;
     if (along <= .1 || along > 60) continue;
     const perp = Math.hypot(vx - dx * along, vy - dy * along);
     if (perp > .3) continue;
     const h = P.eye + slope * along;                         // высота попадания (0 — пол, 1 — макушка)
-    if (h < .04 || h > .95) continue;
-    if (along < tDist) { tDist = along; target = b; head = h > .74; }
+    if (h < .04 || h > .68) continue;
+    if (along < tDist) { tDist = along; target = b; head = h > .54; }
   }
   const wall = castWall(P.x, P.y, dx, dy, 60).dist;
   if (target && tDist < wall) {
     let dmg = w.dmg * clamp(1 - tDist * .01, .5, 1);
     if (head) dmg *= w.hs;
-    hurtBot(target, dmg, head, P.cur);
+    hurtActor(target, dmg, head, P.cur, true, null);
     spawnParts(P.x + dx * tDist, P.y + dy * tDist, P.eye + slope * tDist, head ? 12 : 7, 'blood');
   } else {
     spawnParts(P.x + dx * (wall - .05), P.y + dy * (wall - .05),
                clamp(P.eye + slope * wall, .05, .95), 7, 'spark');
   }
   // выстрел слышно — боты настораживаются
-  for (const b of bots) if (b.alive && Math.hypot(b.x - P.x, b.y - P.y) < G.diff.hearing) {
-    if (G.time - b.alertAt > 3) b.reactAt = G.time + rnd(.3, .7);
-    b.alertAt = G.time; b.lastX = P.x; b.lastY = P.y;
-  }
+  for (const b of actors) if (b.alive && Math.hypot(b.x - P.x, b.y - P.y) < b.prof.hearing)
+    alarm(b, P.x, P.y, rnd(.3, .7));
 }
 let reloadId = 0;
 function reload() {
@@ -1058,10 +1249,11 @@ function explode(n) {
   SFX.boom();
   fx.push({ type: 'boom', x: n.x, y: n.y, z: n.z, t: G.time + .45, born: G.time });
   const R = 5.5;
-  for (const b of bots) {
-    if (!b.alive) continue;
+  for (const b of actors) {
+    if (!b.alive || b.team === P.team) continue;          // своих не задеваем
     const d = Math.hypot(b.x - n.x, b.y - n.y);
-    if (d < R && losClear(n.x, n.y, b.x, b.y)) hurtBot(b, 98 * Math.pow(1 - d / R, 1.35), false, 'he');
+    if (d < R && losClear(n.x, n.y, b.x, b.y))
+      hurtActor(b, 98 * Math.pow(1 - d / R, 1.35), false, 'he', true, null);
   }
   const dp = Math.hypot(P.x - n.x, P.y - n.y);
   if (P.alive && dp < R && losClear(n.x, n.y, P.x, P.y)) {
@@ -1071,54 +1263,72 @@ function explode(n) {
   G.shake = Math.min(1.4, G.shake + clamp(1.6 - dp / 4, 0, 1.4));
 }
 
-// ---------------------------------------------------------- раунды и экономика
+// ---------------------------------------------------------- раунды и матч
+// Матч из 6 раундов: первые три играем за террористов, потом стороны меняются.
 let lossStreak = 0;
 function startRound() {
-  const s = marks.C.length ? marks.C[(Math.random() * marks.C.length) | 0] : openTiles[0];
-  P.x = s.x; P.y = s.y; P.ang = Math.PI; P.pitch = 0; P.recV = P.recH = 0;
+  P.team = G.round <= (G.rounds / 2) ? 'T' : 'CT';
+  const spots = P.team === 'T' ? marks.T : marks.C;
+  const s = spots[(Math.random() * spots.length) | 0];
+  P.x = s.x; P.y = s.y; P.recV = P.recH = 0; P.pitch = 0;
+  P.ang = Math.atan2(MH / 2 - P.y, MW / 2 - P.x);            // смотрим к центру карты
   P.hp = 100; P.alive = true; P.scoped = false; P.nextFire = 0; P.reloadEnd = 0;
-  P.eye = .5; P.crouch = 0; P.sprayI = 0; P.lastShot = -9;
+  P.eye = .6; P.crouch = 0; P.sprayI = 0; P.lastShot = -9;
+  P.hasBomb = false; P.diedThisRound = false;
   parts.length = 0; shells.length = 0;
   for (const k in P.guns) { P.guns[k].mag = WEAPONS[k].mag; P.guns[k].res = WEAPONS[k].res; }
   if (!weaponInSlot(2)) giveGun('glock');
   P.cur = weaponInSlot(1) || weaponInSlot(2) || 'knife';
   G.bombTime = G.diff.bomb[0]; G.plantTime = G.diff.bomb[1]; G.defuseTime = G.diff.bomb[2];
-  nades.length = 0; fx.length = 0;
-  spawnBots();                                 // spawnBots сам раскладывает C4
+  nades.length = 0; fx.length = 0; G.spec = null;
+  spawnActors();
   G.roundT = 0; G.phase = 'live'; G.state = 'play';
-  SFX.start(); showMsg('РАУНД ' + G.round, 'Магазин — клавиша B (20 сек)');
+  SFX.start();
+  showMsg('РАУНД ' + G.round + ' · ' + (P.team === 'T' ? 'ТЕРРОРИСТЫ' : 'КОНТР-ТЕРРОРИСТЫ'),
+          P.team === 'T' ? 'C4 у тебя: дойди до точки A или B и удерживай E'
+                         : 'Не дай заложить C4, а заложенную сними на E');
 }
 function endRound(win, reason) {
   if (G.phase === 'end') return;
   G.phase = 'end'; G.endAt = G.time + 4; G.endWin = win;
   if (win) {
-    G.winsCT++; lossStreak = 0;
-    const bonus = reason === 'Бомба обезврежена' ? 3500 : 3250;
+    G.myWins++; lossStreak = 0;
+    const bonus = 3250;
     P.money = Math.min(16000, P.money + bonus);
     SFX.win(); showMsg('РАУНД ВЫИГРАН', (reason ? reason + ' · ' : '') + '+$' + bonus);
   } else {
-    G.winsT++;
+    G.foeWins++;
     P.money = Math.min(16000, P.money + 1400 + Math.min(3, lossStreak) * 500);
     lossStreak++;
-    // при смерти теряется основное оружие
-    for (const k in P.guns) if (slotOf(k) === 1) delete P.guns[k];
-    P.armor = 0; P.helmet = false; P.nades = 0;
     SFX.lose(); showMsg('РАУНД ПРОИГРАН',
       (reason ? reason + ' · ' : '') + '+$' + (1400 + Math.min(3, lossStreak - 1) * 500));
   }
+  if (P.diedThisRound) {                                    // погиб — теряешь основное оружие
+    for (const k in P.guns) if (slotOf(k) === 1) delete P.guns[k];
+    P.armor = 0; P.helmet = false; P.nades = 0;
+  }
 }
 function nextRound() {
-  if (G.winsCT >= 10 || G.winsT >= 10) { gameOver(); return; }
-  G.round++; startRound();
+  if (G.round >= G.rounds) { gameOver(); return; }
+  G.round++;
+  const swap = G.round === G.rounds / 2 + 1;
+  if (swap) {                                              // смена сторон — экономика с нуля
+    P.money = G.diff.money; P.guns = {}; giveGun('glock');
+    P.armor = 0; P.helmet = false; P.nades = 0; lossStreak = 0;
+  }
+  startRound();
+  if (swap) showMsg('СМЕНА СТОРОН',
+    'Теперь ты ' + (P.team === 'T' ? 'террорист' : 'контр-террорист') + ' · экономика с нуля');
 }
 function gameOver() {
   G.state = 'over';
   document.body.classList.add('inmenu');
-  const win = G.winsCT > G.winsT;
+  const win = G.myWins > G.foeWins, draw = G.myWins === G.foeWins;
   document.getElementById('menu').classList.add('show');
-  document.querySelector('#menu h1').innerHTML = win ? 'ПОБЕДА<span>!</span>' : 'ПОРАЖЕНИЕ';
+  document.querySelector('#menu h1').innerHTML =
+    draw ? 'НИЧЬЯ' : (win ? 'ПОБЕДА<span>!</span>' : 'ПОРАЖЕНИЕ');
   document.querySelector('#menu h2').textContent =
-    'СЧЁТ ' + G.winsCT + ' : ' + G.winsT + '   ·   УБИЙСТВ: ' + P.kills + '   ·   СМЕРТЕЙ: ' + P.deaths;
+    'СЧЁТ ' + G.myWins + ' : ' + G.foeWins + '   ·   УБИЙСТВ: ' + P.kills + '   ·   СМЕРТЕЙ: ' + P.deaths;
   document.getElementById('startbtn').textContent = 'ИГРАТЬ ЗАНОВО';
   document.getElementById('resumebtn').style.display = 'none';
   document.exitPointerLock && document.exitPointerLock();
@@ -1242,17 +1452,31 @@ function resize() {
 }
 addEventListener('resize', resize);
 
+// камера: пока жив — глазами игрока, после смерти — наблюдаем за напарником
+const CAM = { x: 2.5, y: 2.5, ang: 0, pitch: 0, eye: .6, spectating: false };
+function updateCamera() {
+  if (P.alive || G.state === 'menu') {
+    CAM.x = P.x; CAM.y = P.y; CAM.ang = viewAng(); CAM.eye = P.eye;
+    CAM.pitch = viewPitch() + Math.sin(P.bob * 2) * .008 * clamp(moveSpeed(), 0, 1);
+    CAM.spectating = false;
+    return;
+  }
+  const mates = actors.filter(a => a.alive && a.team === P.team);
+  if (!mates.length) { CAM.spectating = false; return; }
+  if (!G.spec || !G.spec.alive || G.spec.team !== P.team) G.spec = mates[0];
+  CAM.x = lerp(CAM.x, G.spec.x, .25); CAM.y = lerp(CAM.y, G.spec.y, .25);
+  CAM.ang = G.spec.ang; CAM.pitch = 0; CAM.eye = .6; CAM.spectating = true;
+}
 function renderWorld() {
-  const fovLen = P.scoped && WEAPONS[P.cur].scope ? .222 : .649;
-  const ang = viewAng();
+  const fovLen = P.alive && P.scoped && WEAPONS[P.cur].scope ? .222 : .649;
+  const ang = CAM.ang;
   const dirX = Math.cos(ang), dirY = Math.sin(ang);
   const planeX = -dirY * fovLen, planeY = dirX * fovLen;
-  const bobY = Math.sin(P.bob * 2) * .008 * clamp(moveSpeed(), 0, 1);
-  const ph = (viewPitch() + bobY) * RH;
+  const ph = CAM.pitch * RH;
   const half = RH / 2;
 
   // --- потолок и пол (высота глаз меняется при приседании)
-  const eye = P.eye, ceilH = (1 - eye) * RH, floorH = eye * RH;
+  const eye = CAM.eye, ceilH = (1 - eye) * RH, floorH = eye * RH;
   for (let y = 0; y < RH; y++) {
     const p = y - half - ph;
     const isFloor = p > 0;
@@ -1260,7 +1484,7 @@ function renderWorld() {
     const lvl = shadeLevel(rowDist);
     const row = y * RW;
     const tex = isFloor ? FLOOR_TEX[lvl] : CEIL_TEX[lvl];
-    let fx0 = P.x + rowDist * (dirX - planeX), fy0 = P.y + rowDist * (dirY - planeY);
+    let fx0 = CAM.x + rowDist * (dirX - planeX), fy0 = CAM.y + rowDist * (dirY - planeY);
     const stepX = rowDist * 2 * planeX / RW, stepY = rowDist * 2 * planeY / RW;
     for (let x = 0; x < RW; x++) {
       const tx = (fx0 * TS) & TMASK, ty = (fy0 * TS) & TMASK;
@@ -1273,11 +1497,11 @@ function renderWorld() {
   for (let x = 0; x < RW; x++) {
     const camX = 2 * x / RW - 1;
     const rdx = dirX + planeX * camX, rdy = dirY + planeY * camX;
-    let mx = P.x | 0, my = P.y | 0;
+    let mx = CAM.x | 0, my = CAM.y | 0;
     const ddx = rdx === 0 ? 1e30 : Math.abs(1 / rdx), ddy = rdy === 0 ? 1e30 : Math.abs(1 / rdy);
     let sx, sy, sdx, sdy;
-    if (rdx < 0) { sx = -1; sdx = (P.x - mx) * ddx; } else { sx = 1; sdx = (mx + 1 - P.x) * ddx; }
-    if (rdy < 0) { sy = -1; sdy = (P.y - my) * ddy; } else { sy = 1; sdy = (my + 1 - P.y) * ddy; }
+    if (rdx < 0) { sx = -1; sdx = (CAM.x - mx) * ddx; } else { sx = 1; sdx = (mx + 1 - CAM.x) * ddx; }
+    if (rdy < 0) { sy = -1; sdy = (CAM.y - my) * ddy; } else { sy = 1; sdy = (my + 1 - CAM.y) * ddy; }
     let side = 0, tex = 0;
     for (let i = 0; i < 96; i++) {
       if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
@@ -1290,9 +1514,9 @@ function renderWorld() {
     if (!tex) continue;
 
     const lineH = RH / dist;
-    const top = half + ph - lineH * (1 - P.eye);
+    const top = half + ph - lineH * (1 - eye);
     let y0 = Math.max(0, Math.ceil(top)), y1 = Math.min(RH - 1, Math.floor(top + lineH));
-    let wallX = side === 0 ? P.y + dist * rdy : P.x + dist * rdx;
+    let wallX = side === 0 ? CAM.y + dist * rdy : CAM.x + dist * rdx;
     wallX -= Math.floor(wallX);
     let texX = (wallX * TS) | 0;
     if ((side === 0 && rdx > 0) || (side === 1 && rdy < 0)) texX = TS - texX - 1;
@@ -1308,9 +1532,14 @@ function renderWorld() {
 
   // --- спрайты
   const list = [];
-  for (const b of bots) {
-    if (b.alive) list.push({ x: b.x, y: b.y, s: SPR.T, hb: 0, ht: .95, w: .78 });
-    else if (G.time - b.deadAt < 25) list.push({ x: b.x, y: b.y, s: SPR.corpseT, hb: 0, ht: .32, w: 1.1 });
+  for (const b of actors) {
+    if (b === G.spec && CAM.spectating) continue;             // за кем смотрим — не рисуем
+    if (b.alive) {
+      const pick = actorSprite(b, CAM.x, CAM.y);
+      list.push({ x: b.x, y: b.y, s: pick.s, flip: pick.flip, hb: 0, ht: .68, w: .3 });
+    } else if (G.time - b.deadAt < 25) {
+      list.push({ x: b.x, y: b.y, s: SPR['corpse' + b.team], hb: 0, ht: .22, w: .5 });
+    }
   }
   for (const n of nades) list.push({ x: n.x, y: n.y, s: SPR.nade, hb: n.z - .07, ht: n.z + .07, w: .16 });
   if (G.bomb && (G.bomb.state === 'planted' || G.bomb.state === 'dropped'))
@@ -1320,17 +1549,17 @@ function renderWorld() {
     const k = clamp((G.time - f.born) / .45, 0, 1), r = .8 + k * 2.6;
     list.push({ x: f.x, y: f.y, s: SPR.boom, hb: f.z - r, ht: f.z + r, w: r * 2, bright: true });
   }
-  list.sort((a, b) => (Math.hypot(b.x - P.x, b.y - P.y) - Math.hypot(a.x - P.x, a.y - P.y)));
+  list.sort((a, b) => (Math.hypot(b.x - CAM.x, b.y - CAM.y) - Math.hypot(a.x - CAM.x, a.y - CAM.y)));
 
   const invDet = 1 / (planeX * dirY - dirX * planeY);
   for (const sp of list) {
-    const dx = sp.x - P.x, dy = sp.y - P.y;
+    const dx = sp.x - CAM.x, dy = sp.y - CAM.y;
     const tx = invDet * (dirY * dx - dirX * dy);
     const tz = invDet * (-planeY * dx + planeX * dy);
     if (tz < .18) continue;
     const scrX = (RW / 2) * (1 + tx / tz);
-    const yTop = half + ph - ((sp.ht - P.eye) * RH) / tz;
-    const yBot = half + ph - ((sp.hb - P.eye) * RH) / tz;
+    const yTop = half + ph - ((sp.ht - eye) * RH) / tz;
+    const yBot = half + ph - ((sp.hb - eye) * RH) / tz;
     const hPix = yBot - yTop, wPix = (sp.w * RH) / tz;
     if (hPix < 1 || wPix < 1) continue;
     const x0 = Math.max(0, Math.ceil(scrX - wPix / 2)), x1 = Math.min(RW - 1, Math.floor(scrX + wPix / 2));
@@ -1339,8 +1568,9 @@ function renderWorld() {
     const data = sp.s.levels[lvl], sw = sp.s.w, sh = sp.s.h;
     for (let x = x0; x <= x1; x++) {
       if (tz >= zbuf[x]) continue;
-      const u = (((x - (scrX - wPix / 2)) * sw / wPix) | 0);
+      let u = (((x - (scrX - wPix / 2)) * sw / wPix) | 0);
       if (u < 0 || u >= sw) continue;
+      if (sp.flip) u = sw - 1 - u;
       for (let y = y0; y <= y1; y++) {
         const v = (((y - yTop) * sh / hPix) | 0);
         if (v < 0 || v >= sh) continue;
@@ -1351,13 +1581,13 @@ function renderWorld() {
   }
   // --- частицы (искры, кровь)
   for (const q of parts) {
-    const dx = q.x - P.x, dy = q.y - P.y;
+    const dx = q.x - CAM.x, dy = q.y - CAM.y;
     const tx = invDet * (dirY * dx - dirX * dy);
     const tz = invDet * (-planeY * dx + planeX * dy);
     if (tz < .12) continue;
     const sx = ((RW / 2) * (1 + tx / tz)) | 0;
     if (sx < 0 || sx >= RW || tz >= zbuf[sx]) continue;
-    const sy = (half + ph - ((q.z - P.eye) * RH) / tz) | 0;
+    const sy = (half + ph - ((q.z - eye) * RH) / tz) | 0;
     const sz = Math.max(1, Math.min(6, (q.r * RH / tz) | 0));
     for (let yy = sy; yy < sy + sz; yy++) {
       if (yy < 0 || yy >= RH) continue;
@@ -1511,9 +1741,14 @@ function drawMinimap(s) {
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++)
     if (grid[y * MW + x]) ctx.fillRect(x * cell, y * cell, cell + .5, cell + .5);
   // враги — только те, кто на линии видимости (радарный контакт)
-  ctx.fillStyle = '#e8564a';
-  for (const b of bots) if (b.alive && (botSees(b) || G.time - b.alertAt < 1.5))
+  for (const b of actors) {                                   // напарники всегда, враги — по контакту
+    if (!b.alive) continue;
+    const mate = b.team === P.team;
+    const spotted = P.alive && Math.hypot(P.x - b.x, P.y - b.y) < 26 && losClear(P.x, P.y, b.x, b.y);
+    if (!mate && !spotted && G.time - b.alertAt > 1.5) continue;
+    ctx.fillStyle = mate ? '#7ee08a' : '#e8564a';
     ctx.fillRect(b.x * cell - cell * .6, b.y * cell - cell * .6, cell * 1.2, cell * 1.2);
+  }
   ctx.font = 'bold ' + (9 * s) + 'px Consolas, monospace';                 // точки закладки
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(224,176,96,.75)';
@@ -1523,8 +1758,8 @@ function drawMinimap(s) {
     ctx.fillStyle = pulse ? '#ff5a4a' : '#8a2a24';
     ctx.fillRect(G.bomb.x * cell - cell, G.bomb.y * cell - cell, cell * 2, cell * 2);
   }
-  ctx.fillStyle = '#61a8ff';
-  ctx.save(); ctx.translate(P.x * cell, P.y * cell); ctx.rotate(P.ang);
+  ctx.fillStyle = CAM.spectating ? '#9aa4b2' : '#61a8ff';
+  ctx.save(); ctx.translate(CAM.x * cell, CAM.y * cell); ctx.rotate(CAM.ang);
   ctx.beginPath(); ctx.moveTo(cell, 0); ctx.lineTo(-cell * .7, cell * .7);
   ctx.lineTo(-cell * .7, -cell * .7); ctx.closePath(); ctx.fill();
   ctx.restore();
@@ -1540,6 +1775,8 @@ function showMsg(title, sub) {
   el.style.opacity = 1; msgT = G.time + 2.6;
 }
 function updateHUD() {
+  const bmb = G.bomb, planted = bmb && bmb.state === 'planted';
+  const foe = P.team === 'T' ? 'CT' : 'T';
   $('hpv').textContent = Math.ceil(P.hp);
   $('hpv').className = 'big' + (P.hp <= 35 ? ' low' : '');
   $('apv').textContent = Math.ceil(P.armor) + (P.helmet ? '+' : '');
@@ -1549,27 +1786,60 @@ function updateHUD() {
   $('magv').textContent = g ? g.mag : '—';
   $('resv').textContent = g ? ' / ' + g.res : '';
   $('nades').textContent = 'Гранаты: ' + P.nades + (P.nades ? '  [G]' : '');
-  const bmb = G.bomb, planted = bmb && bmb.state === 'planted';
+
   const left = planted ? Math.max(0, G.bombTime - (G.time - bmb.planted))
                        : Math.max(0, G.roundLen - G.roundT);
   $('timer').textContent = ((left / 60) | 0) + ':' + ('0' + ((left % 60) | 0)).slice(-2);
   $('timer').className = planted ? 'bomb' : '';
-  $('bombline').style.display = planted ? 'block' : 'none';
-  if (planted) $('bombline').textContent = 'C4 НА ТОЧКЕ ' + bmb.site.name +
-    (Math.hypot(P.x - bmb.x, P.y - bmb.y) < 1.5 ? ' — ДЕРЖИ E' : '');
-  const def = planted && bmb.defuse > .02;
-  $('defuse').style.display = def ? 'block' : 'none';
-  if (def) $('defusefill').style.width = (bmb.defuse / G.defuseTime * 100).toFixed(0) + '%';
-  $('score').innerHTML = '<span class="ct">CT ' + G.winsCT + '</span> : <span class="t">' + G.winsT + ' T</span>';
-  const alive = bots.filter(b => b.alive).length;
-  $('roundinfo').textContent = 'Раунд ' + G.round + ' · врагов: ' + alive + ' · K/D ' + P.kills + '/' + P.deaths;
+
+  // строка о бомбе: у кого она и что делать
+  let bl = '';
+  if (planted) bl = 'C4 НА ТОЧКЕ ' + bmb.site.name +
+      (P.alive && Math.hypot(P.x - bmb.x, P.y - bmb.y) < 1.5
+        ? (P.team === 'CT' ? ' — ДЕРЖИ E' : ' — ЗАЩИЩАЙ') : '');
+  else if (P.hasBomb) bl = 'C4 У ТЕБЯ · НЕСИ НА A ИЛИ B';
+  else if (bmb && bmb.state === 'dropped' && P.team === 'T') bl = 'C4 ВЫРОНИЛИ · ПОДБЕРИ ЕЁ';
+  $('bombline').textContent = bl;
+  $('bombline').style.display = bl ? 'block' : 'none';
+
+  // одна полоса на закладку и на разминирование
+  const planting = !planted && P.hasBomb && bmb && bmb.plantProg > .02;
+  const defusing = planted && bmb.defuse > .02;
+  $('defuse').style.display = (planting || defusing) ? 'block' : 'none';
+  if (planting) {
+    $('defusetxt').textContent = 'ЗАКЛАДКА C4';
+    $('defusefill').style.width = (bmb.plantProg / G.plantTime * 100).toFixed(0) + '%';
+  } else if (defusing) {
+    $('defusetxt').textContent = 'ОБЕЗВРЕЖИВАНИЕ';
+    $('defusefill').style.width = (bmb.defuse / G.defuseTime * 100).toFixed(0) + '%';
+  }
+
+  $('score').innerHTML = '<span class="ct">ТЫ ' + G.myWins + '</span> : <span class="t">' +
+    G.foeWins + ' ПРОТИВНИК</span>';
+  $('roundinfo').textContent = 'Раунд ' + G.round + '/' + G.rounds + ' · ' +
+    (P.team === 'T' ? 'террористы' : 'контр-террористы') +
+    ' · врагов: ' + aliveCount(foe) + ' · K/D ' + P.kills + '/' + P.deaths;
+
+  // состав своей команды
+  const mates = actors.filter(a => a.team === P.team);
+  $('team').innerHTML = mates.map(a =>
+    '<div class="mate' + (a.alive ? '' : ' dead') + '"><span class="nm">' + a.name + '</span>' +
+    '<span class="bar"><i style="width:' + Math.max(0, Math.round(a.hp)) + '%"></i></span>' +
+    (a.hasBomb ? '<span style="color:#e0b060">C4</span>' : '') + '</div>').join('');
+  $('team').style.display = mates.length ? 'block' : 'none';
+
+  $('spec').style.display = CAM.spectating ? 'block' : 'none';
+  if (CAM.spectating && G.spec) $('spec').textContent = 'ТЫ ПОГИБ · СМОТРИШЬ ЗА ' + G.spec.name.toUpperCase();
+
   const locked = document.pointerLockElement === cv;
-  const nearBomb = planted && P.alive && Math.hypot(P.x - bmb.x, P.y - bmb.y) < 1.5;
+  const nearBomb = planted && P.alive && P.team === 'CT' && Math.hypot(P.x - bmb.x, P.y - bmb.y) < 1.5;
+  const onSite = P.alive && P.hasBomb && !!siteAt(P.x, P.y);
   $('hint').innerHTML = !locked ? 'Кликни по экрану, чтобы управлять мышью'
                       : nearBomb ? 'Удерживай <b>E</b> — обезвредить'
+                      : onSite   ? 'Удерживай <b>E</b> — заложить C4'
                                  : 'Нажми <b>B</b> — магазин';
   $('hint').style.display =
-    (!locked && G.state === 'play') || nearBomb || canBuy() ? '' : 'none';
+    (!locked && G.state === 'play') || nearBomb || onSite || canBuy() ? '' : 'none';
   if (G.time > msgT) $('centermsg').style.opacity = 0;
   const fe = $('feed');
   fe.innerHTML = feed.filter(f => G.time - f.t < 6).map(f =>
@@ -1619,7 +1889,8 @@ function frame(ts) {
   if (G.state === 'play') {
     G.time += dt; G.roundT += dt;
     updatePlayer(dt);
-    for (const b of bots) updateBot(b, dt);
+    for (const a of actors) updateActor(a, dt);
+    checkRoundOutcome();
     updateNades(dt);
     updateParts(dt);
     updateBomb(dt);
@@ -1631,6 +1902,7 @@ function frame(ts) {
     checkRoundTime();
     if (G.phase === 'end' && G.time > G.endAt) nextRound();
   }
+  updateCamera();
   renderWorld();
   drawScreen();
   updateHUD();
@@ -1639,12 +1911,12 @@ function frame(ts) {
 
 // ---------------------------------------------------------- запуск
 function newGame() {
-  G.round = 1; G.winsCT = 0; G.winsT = 0; G.time = 0; lossStreak = 0;
+  G.round = 1; G.myWins = 0; G.foeWins = 0; G.time = 0; lossStreak = 0;
   P.money = G.diff.money; P.kills = 0; P.deaths = 0; P.armor = 0; P.helmet = false; P.nades = 0;
   P.guns = {}; giveGun('glock'); P.cur = 'glock';
   feed.length = 0;
   document.querySelector('#menu h1').innerHTML = 'CS<span>2</span> LITE';
-  document.querySelector('#menu h2').textContent = 'ЛЁГКАЯ КОПИЯ COUNTER-STRIKE 2';
+  document.querySelector('#menu h2').textContent = 'ЛЁГКАЯ КОПИЯ COUNTER-STRIKE 2 · 3 НА 3';
   startRound();
 }
 $('startbtn').onclick = () => {
